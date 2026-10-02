@@ -17,7 +17,9 @@ jobs:
         shell: bash
         run: echo "VERSION=$(grep -m1 '^__version__' faster.py | cut -d'"' -f2)" >> "$GITHUB_ENV"
       - run: python -m pip install --upgrade pip pyinstaller -r requirements.txt
-      - run: python -m PyInstaller --noconfirm --clean --onefile --noconsole --name Faster --icon icon.ico --collect-submodules send2trash faster_gui.py
+      - run: python -m unittest discover -s tests
+      - run: python fetch_wordlist.py
+      - run: python -m PyInstaller --noconfirm --clean --onefile --noconsole --name Faster --icon icon.ico --collect-submodules send2trash --add-data "bip39_english.txt;." faster_gui.py
       - uses: actions/upload-artifact@v4
         with: { name: "Faster-${{ env.VERSION }}-windows", path: dist/Faster.exe }
 
@@ -27,6 +29,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - run: python3 fetch_wordlist.py
       - run: bash build_mac.sh
       - name: 读取版本号
         run: echo "VERSION=$(grep -m1 '^__version__' faster.py | cut -d'"' -f2)" >> "$GITHUB_ENV"

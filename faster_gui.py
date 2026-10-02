@@ -41,6 +41,7 @@ if "--elevated" in sys.argv and "--home" in sys.argv:
     os.environ["HOME"] = _h
     os.environ["USERPROFILE"] = _h
 import faster as core  # noqa: E402
+import faster_crypto as fc  # noqa: E402
 from faster import human, HOME, APP_DIR, TRASH_DIR, IS_WIN, IS_MAC, IS_LINUX, __version__  # noqa: E402
 
 try:
@@ -125,10 +126,22 @@ def danger_reason(p):
     return None
 
 
+def _has_wallet(child):
+    if core.is_wallet_path(str(child)):
+        return True
+    if child.is_dir() and not child.is_symlink():
+        for r, _, fs in os.walk(child):
+            if core.is_wallet_path(r) or any(core.is_wallet_path(os.path.join(r, f)) for f in fs):
+                return True
+    return False
+
+
 def empty_dir(p):
     freed = 0
     for child in Path(p).iterdir():
         try:
+            if _has_wallet(child):
+                continue                      # 钱包文件即使在废纸篓里也不自动清空
             if child.is_dir() and not child.is_symlink():
                 freed += core.dir_size(child)
                 shutil.rmtree(child, ignore_errors=True)
@@ -217,7 +230,7 @@ def auto_clean(dry_run=False):
         if bad:
             lines.append(f"  跳过文件夹 {root}：{bad}")
             continue
-        cutoff, n, sz_total = time.time() - days * 86400, 0, 0
+        cutoff, n, sz_total, skipped = time.time() - days * 86400, 0, 0, 0
         for r, dirs, files in os.walk(root, onerror=lambda e: None):
             dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(r, d))]
             for f in files:
@@ -225,6 +238,9 @@ def auto_clean(dry_run=False):
                 try:
                     st = os.lstat(fp)
                     if st.st_mtime >= cutoff:
+                        continue
+                    if core.is_wallet_path(fp):
+                        skipped += 1
                         continue
                     if dry_run or core.safe_remove(fp):
                         n += 1
@@ -234,6 +250,8 @@ def auto_clean(dry_run=False):
         if n:
             lines.append(f"  文件夹 {root}：{n} 个超过 {days} 天的文件，{human(sz_total)}"
                          f"{'' if dry_run else '（已移入回收站，可找回）'}")
+        if skipped:
+            lines.append(f"  文件夹 {root}：已保护并跳过 {skipped} 个钱包文件")
         freed += sz_total
 
     lines.append(f"{tag}合计{'可释放' if dry_run else '释放'} {human(freed)}")
@@ -467,10 +485,28 @@ def restore_entry(e):
         return False, str(ex)
 
 
+def scan_miners_core():
+    for f in fc.detect_miners(2.0)["findings"]:
+        core.add(f["level"], f["msg"])
+
+
+def open_location(path):
+    p = Path(path)
+    try:
+        if IS_WIN:
+            subprocess.Popen(["explorer", f"/select,{p}"] if p.exists() else ["explorer", str(p.parent)])
+        elif IS_MAC:
+            subprocess.Popen(["open", "-R", str(p)])
+        else:
+            subprocess.Popen(["xdg-open", str(p if p.is_dir() else p.parent)])
+    except Exception:
+        pass
+
+
 def run_all_scans():
     core.findings.clear()
     for fn in (core.scan_processes, core.scan_persistence, core.scan_hosts,
-               core.scan_temp_executables, core.scan_security_posture):
+               core.scan_temp_executables, core.scan_security_posture, scan_miners_core):
         try:
             fn()
         except Exception as e:
@@ -671,8 +707,8 @@ if tk:
     class ListTab(ttk.Frame):
         """带工具栏 + 多选表格的通用页面"""
 
-        def __init__(self, app, columns):
-            super().__init__(app.nb)
+        def __init__(self, app, columns, parent=None):
+            super().__init__(parent or app.nb)
             self.app, self.data = app, {}
             self.top = ttk.Frame(self)
             self.top.pack(fill="x", padx=8, pady=6)
@@ -759,6 +795,7 @@ if tk:
             tips = ("使用提示：\n"
                     "  • 所有删除/停用操作都会先让你确认；被删文件优先进回收站（或工具回收站，可找回）。\n"
                     "  • “自动清理”页可设置每天/每周/每月定时清理，由系统计划任务执行，不需要保持本程序运行。\n"
+                    "  • “钱包安全”页：钱包文件自动受保护、助记词/私钥泄露扫描、挖矿检测、剪贴板劫持守护。\n"
                     "  • 风险扫描为启发式检测，不能替代专业杀毒软件。")
             ttk.Label(self, text=tips, foreground="#555", justify="left").pack(anchor="w", padx=18, pady=10)
             self.refresh()
@@ -877,7 +914,7 @@ if tk:
             self.btn("扫描（大→小）", self.scan)
             self.btn("全选", self.select_all)
             self.btn("删除选中", self.delete)
-            self.info.config(text="这些文件无法自动判断是否有用（视频/虚拟机/安装包等），请自行甄别；删除后进回收站。")
+            self.info.config(text="这些文件无法自动判断是否有用（视频/虚拟机/安装包等），请自行甄别；删除后进回收站。钱包文件已被自动保护、不会出现在列表里。")
 
         def scan(self):
             root = Path(self.root_var.get())
@@ -1175,6 +1212,223 @@ if tk:
                        "Linux：sudo apt install clamav && sudo freshclam；rootkit 检测可用 rkhunter / chkrootkit。")
                 messagebox.showinfo("提示", tip)
 
+    # ------------------------------------------------------------ 钱包安全（v0.2）
+    LV_TAG = {"高危": "high", "中危": "mid", "提示": "note", "正常": "keep", "参考": "keep"}
+
+    class WalletFilesTab(ListTab):
+        def __init__(self, app, parent):
+            super().__init__(app, [("kind", "类型", 190, "w"), ("size", "大小", 80, "e"), ("mod", "最后修改", 100, "center"),
+                                   ("cloud", "云同步", 90, "center"), ("path", "路径", 620, "w")], parent)
+            self.btn("扫描钱包文件", self.scan)
+            self.btn("打开所在位置", self.reveal)
+            self.info.config(text="Faster 的清理 / 大文件 / 重复文件 / 自动清理 / 卸载废纸篓清空，都会自动跳过这些文件。点“扫描”查看。")
+
+        def scan(self):
+            def done(res):
+                self.clear()
+                for r in res:
+                    d = datetime.date.fromtimestamp(r["mtime"]).isoformat() if r["mtime"] else "-"
+                    self.add((r["kind"], human(r["size"]), d, r["cloud"] or "-", r["path"]), r, ("high",) if r["cloud"] else ())
+                cloud = sum(1 for r in res if r["cloud"])
+                msg = f"发现 {len(res)} 个钱包文件/目录，已全部受 Faster 保护。"
+                if cloud:
+                    msg += f"  ⚠ 其中 {cloud} 个位于云同步目录（红色），云端可能有副本，建议迁出并确认已离线备份助记词。"
+                self.info.config(text=msg if res else "没有发现钱包文件。")
+
+            self.app.run_bg(lambda: fc.find_wallet_files(HOME), done, "查找钱包文件…（会遍历主目录，可能需要几分钟）")
+
+        def reveal(self):
+            sel = self.need_selection()
+            if sel:
+                open_location(sel[0][1]["path"])
+
+    class ChainDirsTab(ListTab):
+        def __init__(self, app, parent):
+            super().__init__(app, [("name", "软件", 140, "w"), ("total", "总大小", 90, "e"), ("resync", "可重新同步的数据", 220, "w"),
+                                   ("wallet", "钱包相关（勿删）", 190, "w"), ("path", "位置", 420, "w")], parent)
+            self.btn("扫描区块链数据", self.scan)
+            self.btn("打开所在位置", self.reveal)
+            self.tree.bind("<<TreeviewSelect>>", self.on_select)
+            self.info.config(text="只识别和提示，Faster 不会自动删除这些数据。删除“可重新同步”的区块数据前请先关闭对应软件，重新同步可能需要数小时到数天。")
+
+        def scan(self):
+            def done(res):
+                self.clear()
+                fmt = lambda xs: "、".join(f"{s} {human(z)}" for s, z in xs) or "—"  # noqa: E731
+                for e in res:
+                    self.add((e["name"], human(e["total"]), fmt(e["resync"]), fmt(e["wallet"]), e["path"]), e)
+                free = sum(z for e in res for _, z in e["resync"])
+                self.info.config(text=f"发现 {len(res)} 个区块链软件数据目录；其中可重新同步的数据共 {human(free)}。" if res
+                                 else "没有发现常见区块链软件的数据目录。")
+
+            self.app.run_bg(lambda: fc.known_chain_dirs(), done, "识别区块链数据目录…")
+
+        def on_select(self, _e=None):
+            sel = self.selected()
+            if sel and sel[0][1]["note"]:
+                self.info.config(text="提示：" + sel[0][1]["note"])
+
+        def reveal(self):
+            sel = self.need_selection()
+            if sel:
+                open_location(sel[0][1]["path"])
+
+    class SecretScanTab(ListTab):
+        def __init__(self, app, parent):
+            super().__init__(app, [("lv", "级别", 60, "center"), ("kind", "类型", 150, "w"),
+                                   ("detail", "说明", 430, "w"), ("loc", "位置", 400, "w")], parent)
+            self.path_picker()
+            self.btn("开始扫描", self.scan)
+            self.btn("获取 BIP39 词表", self.get_wl)
+            self.btn("打开所在位置", self.reveal)
+            self.wl = ttk.Label(self.top, text="")
+            self.wl.pack(side="left", padx=8)
+            self.refresh_wl()
+            self.info.config(text="在文本/笔记/Office 文件里查找明文保存的助记词和私钥。结果只显示位置与类型，不回显任何内容，也不会上传。")
+
+        def refresh_wl(self):
+            ok = fc.get_wordlist() is not None
+            self.wl.config(text="词表：已就绪（可校验）" if ok else "词表：未加载（仅启发式检测，建议点“获取 BIP39 词表”）",
+                           foreground="#2e7d32" if ok else "#e65100")
+
+        def get_wl(self):
+            def done(r):
+                (messagebox.showinfo if r[0] else messagebox.showwarning)("BIP39 词表", r[1])
+                self.refresh_wl()
+            self.app.run_bg(fc.download_wordlist, done, "下载并校验 BIP39 词表…")
+
+        def scan(self):
+            root = Path(self.root_var.get())
+            if not root.is_dir():
+                return messagebox.showerror("错误", "目录不存在")
+
+            def done(r):
+                res, n = r
+                self.clear()
+                for x in res:
+                    loc = x["path"] + (f"  (第 {x['line']} 行)" if x["line"] else "")
+                    self.add((x["level"], x["kind"], x["detail"], loc), x, (LV_TAG[x["level"]],))
+                hi = sum(1 for x in res if x["level"] == "高危")
+                if res:
+                    self.info.config(text=f"已扫描 {n} 个文件，发现 {len(res)} 项（高危 {hi}）。建议：把资产转到新钱包（新助记词），"
+                                          f"助记词抄写在纸上离线保存，并删除/加密这些明文文件。")
+                else:
+                    self.info.config(text=f"已扫描 {n} 个文件，未发现明文助记词/私钥。（图片/截图、便签数据库、PDF 不在扫描范围内）")
+
+            self.app.run_bg(lambda: fc.scan_secrets(root), done, "扫描助记词/私钥…（文件多时需要几分钟）")
+
+        def reveal(self):
+            sel = self.need_selection()
+            if sel:
+                open_location(sel[0][1]["path"])
+
+    class MinerTab(ListTab):
+        def __init__(self, app, parent):
+            super().__init__(app, [("lv", "级别", 60, "center"), ("pid", "PID", 70, "e"), ("name", "进程", 180, "w"),
+                                   ("cpu", "CPU", 60, "e"), ("detail", "说明", 560, "w")], parent)
+            self.btn("开始检测（约 3 秒）", self.scan)
+            self.btn("结束选中进程", self.kill)
+            self.info.config(text="检查进程名/命令行里的挖矿特征、连接矿池端口、临时目录里的高 CPU 程序。启动项/计划任务里的挖矿命令会在“风险扫描”里一并检查。")
+            if not psutil:
+                self.info.config(text="需要安装 psutil 才能使用：pip install psutil")
+
+        def scan(self):
+            def done(r):
+                self.clear()
+                for f in r["findings"]:
+                    self.add((f["level"], f["pid"] or "-", f["name"], f"{f['cpu']:.0f}%", f["msg"]), f, (LV_TAG[f["level"]],))
+                for pid, name, cpu in r["top"]:
+                    self.add(("参考", pid, name, f"{cpu:.0f}%", "CPU 占用靠前的进程（仅供参考）"), None, ("keep",))
+                n = len([f for f in r["findings"] if f["level"] != "提示"])
+                self.info.config(text=f"发现 {n} 个可疑项，请核对。" if n else "未发现挖矿迹象。（下方为 CPU 占用靠前的进程）")
+
+            self.app.run_bg(lambda: fc.detect_miners(3.0), done, "检测挖矿进程…")
+
+        def kill(self):
+            sel = [(i, o) for i, o in self.need_selection() or [] if o and o.get("pid")]
+            if not sel or not psutil or not messagebox.askyesno("确认", f"结束 {len(sel)} 个进程？"):
+                return
+            fails = []
+            for _, o in sel:
+                try:
+                    p = psutil.Process(o["pid"])
+                    p.terminate()
+                    p.wait(3)
+                except Exception as e:
+                    fails.append(f"{o['name']}：{e}")
+            messagebox.showwarning("部分未结束", "\n".join(fails)) if fails else messagebox.showinfo(
+                "完成", "已结束。如确认是木马，请再用“风险扫描”找出并停用它的启动项，并用杀毒软件查杀。")
+            self.scan()
+
+    class ClipboardTab(ListTab):
+        def __init__(self, app, parent):
+            super().__init__(app, [("t", "时间", 80, "center"), ("lv", "级别", 60, "center"), ("msg", "记录", 840, "w")], parent)
+            self.guard, self.last_text = fc.ClipboardGuard(), None
+            self.on = tk.BooleanVar(value=False)
+            ttk.Checkbutton(self.top, text="启用剪贴板监控（只在内存里记录，不写入磁盘）", variable=self.on,
+                            command=self.toggle).pack(side="left", padx=4)
+            vf = ttk.Frame(self)
+            vf.pack(fill="x", padx=8, pady=2, after=self.top)
+            ttk.Label(vf, text="校验收款地址：").pack(side="left")
+            self.addr = tk.StringVar()
+            ttk.Entry(vf, textvariable=self.addr, width=52).pack(side="left", padx=4)
+            ttk.Button(vf, text="校验", command=self.verify).pack(side="left")
+            self.res = ttk.Label(vf, text="（把你在钱包/交易所里看到的收款地址粘贴进来，核对是否被替换）")
+            self.res.pack(side="left", padx=8)
+            self.info.config(text="用法：开启监控 → 照常复制地址 → 粘贴到转账页面后，把页面上显示的地址再贴到上面校验。"
+                                  "首尾相同、中间不同的地址是典型的剪贴板劫持/地址投毒。")
+            self.after(800, self.poll)
+
+        def log(self, lv, msg):
+            self.add((time.strftime("%H:%M:%S"), lv, msg), None, (LV_TAG.get(lv, "note"),))
+            self.tree.yview_moveto(1)
+
+        def toggle(self):
+            if self.on.get():
+                self.guard = fc.ClipboardGuard()
+                try:
+                    self.last_text = self.clipboard_get()
+                    self.guard.feed(self.last_text)
+                except tk.TclError:
+                    self.last_text = None
+                self.log("提示", "剪贴板监控已开启")
+            else:
+                self.log("提示", "剪贴板监控已关闭")
+
+        def poll(self):
+            if self.on.get():
+                try:
+                    txt = self.clipboard_get()
+                except tk.TclError:
+                    txt = ""
+                if txt and txt != self.last_text:
+                    self.last_text = txt
+                    kind = fc.classify_address(txt)
+                    alert = self.guard.feed(txt)
+                    if kind and not alert:
+                        self.log("提示", f"记录到 {kind} 地址：{fc.mask_addr(txt.strip())}")
+                    if alert:
+                        self.log(alert["level"], alert["msg"])
+                        self.app.bell()
+                        self.after(50, lambda m=alert["msg"]: messagebox.showwarning("剪贴板地址异常", m))
+            self.after(800, self.poll)
+
+        def verify(self):
+            lv, msg = self.guard.verify(self.addr.get())
+            self.res.config(text=f"[{lv}] {msg}", foreground={"高危": "#c62828", "正常": "#2e7d32"}.get(lv, "#e65100"))
+            self.log(lv, "校验：" + msg)
+
+    class WalletHub(ttk.Frame):
+        def __init__(self, app):
+            super().__init__(app.nb)
+            ttk.Label(self, text="钱包安全：全部在本地运行，不上传任何内容，不接触你的私钥/助记词。",
+                      foreground="#555").pack(anchor="w", padx=10, pady=(8, 0))
+            nb = ttk.Notebook(self)
+            nb.pack(fill="both", expand=True, padx=4, pady=4)
+            for title, cls in (("钱包文件", WalletFilesTab), ("区块链数据", ChainDirsTab), ("密钥泄露扫描", SecretScanTab),
+                               ("挖矿检测", MinerTab), ("剪贴板守护", ClipboardTab)):
+                nb.add(cls(app, nb), text=title)
+
     # ------------------------------------------------------------ 自动清理
     class ScheduleTab(ttk.Frame):
         def __init__(self, app):
@@ -1340,7 +1594,7 @@ if tk:
             self.nb.pack(fill="both", expand=True)
             for title, cls in (("概览", HomeTab), ("垃圾清理", JunkTab), ("大文件", LargeTab), ("重复文件", DupTab),
                                ("启动项", StartupTab), ("后台进程", ProcTab), ("卸载程序", UninstallTab),
-                               ("风险扫描", SecurityTab), ("自动清理", ScheduleTab)):
+                               ("风险扫描", SecurityTab), ("钱包安全", WalletHub), ("自动清理", ScheduleTab)):
                 self.nb.add(cls(self), text=title)
             self.after(100, self.poll)
 

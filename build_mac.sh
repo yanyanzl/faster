@@ -23,8 +23,11 @@ echo "[2/4] 安装打包依赖..."
 python -m pip install --upgrade pip pyinstaller -r requirements.txt
 
 echo "[3/4] 打包 Faster.app ..."
+python fetch_wordlist.py || echo "警告：未能下载 BIP39 词表，助记词扫描将退化为启发式检测（联网后重新打包即可）"
+ADD=()
+if [ -f bip39_english.txt ]; then ADD=(--add-data "bip39_english.txt:."); fi
 python -m PyInstaller --noconfirm --clean --windowed --name Faster --icon icon.icns \
-  --osx-bundle-identifier com.faster.app --collect-submodules send2trash faster_gui.py
+  --osx-bundle-identifier com.faster.app --collect-submodules send2trash "${ADD[@]}" faster_gui.py
 
 echo "写入版本号并重新签名..."
 PL=dist/Faster.app/Contents/Info.plist

@@ -18,7 +18,7 @@ Faster Faster  (Windows / macOS / Linux)
 
 依赖：Python 3.8+。可选：pip install psutil send2trash
 """
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 import os
 import sys
@@ -67,6 +67,14 @@ for d in (BACKUP_DIR, TRASH_DIR, REPORT_DIR):
 
 
 # ----------------------------------------------------------------- 通用工具
+# 钱包文件保护：清理 / 大文件 / 重复文件 / 自动清理一律跳过，safe_remove 也会拒绝
+try:
+    from faster_crypto import is_wallet_path
+except Exception:  # 保护模块缺失时退化为不保护（不影响其余功能）
+    def is_wallet_path(path):
+        return False
+
+
 def human(n):
     n = float(n)
     for u in ("B", "KB", "MB", "GB", "TB"):
@@ -133,8 +141,11 @@ def dir_size(path):
 
 
 def safe_remove(path):
-    """进回收站；失败则移动到 ~/.faster/trash（可找回）"""
+    """进回收站；失败则移动到 ~/.faster/trash（可找回）。钱包文件一律拒绝"""
     path = str(path)
+    if is_wallet_path(path):
+        print(f"   ✗ 已保护（钱包文件），不处理：{path}")
+        return False
     try:
         if send2trash:
             send2trash(path)
@@ -183,6 +194,8 @@ def list_files_in(path, min_age_hours=1):
     for root, _, files in os.walk(path, onerror=lambda e: None):
         for f in files:
             fp = os.path.join(root, f)
+            if is_wallet_path(fp):
+                continue
             try:
                 st = os.lstat(fp)
                 if now - st.st_mtime >= min_age_hours * 3600:
@@ -248,6 +261,8 @@ def walk_user_files(root, min_size):
             if os.path.splitext(f)[1].lower() in SKIP_FILE_EXT:
                 continue
             fp = os.path.join(r, f)
+            if is_wallet_path(fp):
+                continue
             try:
                 if os.path.islink(fp):
                     continue
@@ -661,7 +676,8 @@ def uninstall_programs():
 SUSP_CMD = re.compile(
     r"(powershell[^\n]*\s-(enc|e|encodedcommand)\s|frombase64string|curl[^|\n]*\|\s*(ba)?sh|wget[^|\n]*\|\s*(ba)?sh|"
     r"\bnc(at)?\s+-\w*e\b|/dev/tcp/|mshta|regsvr32[^\n]*http|bitsadmin|certutil[^\n]*-urlcache|"
-    r"[\\/]temp[\\/]|/tmp/|/var/tmp/|/dev/shm|base64\s+-d|\.onion)", re.I)
+    r"[\\/]temp[\\/]|/tmp/|/var/tmp/|/dev/shm|base64\s+-d|\.onion|"
+    r"stratum\+(tcp|ssl)://|xmrig|minerd|--donate-level|cryptonight|kdevtmpfsi|kinsing)", re.I)
 SUSP_DIRS = [r"\temp\\", r"\appdata\local\temp", "/tmp/", "/var/tmp/", "/dev/shm/", "/downloads/", r"\downloads\\"]
 BAD_PORTS = {4444, 31337, 1337, 5555, 6667, 12345, 54321, 9001, 2222, 8888}
 EXEC_EXT = {".exe", ".dll", ".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jar", ".sh", ".elf", ".command", ".app"}
