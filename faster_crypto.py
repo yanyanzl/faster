@@ -21,6 +21,7 @@ import hashlib
 import urllib.request
 from pathlib import Path
 from collections import deque
+from faster_i18n import tr  # noqa: E402
 
 try:
     import psutil
@@ -106,24 +107,24 @@ def wallet_kind(path):
     base = p.rsplit("/", 1)[-1]
     for i, name in _EXT_IDS.items():
         if i in p:
-            return f"浏览器钱包扩展 · {name}"
+            return tr("浏览器钱包扩展 · {0}", name)
     if "exodus" in p:
-        return "Exodus 钱包"
+        return tr("Exodus 钱包")
     if "electrum" in p:
-        return "Electrum 钱包"
+        return tr("Electrum 钱包")
     if "/keystore" in p or base.startswith("utc--") or base.endswith(".keystore") or base == "keystore.json":
-        return "以太坊/EVM 密钥库"
+        return tr("以太坊/EVM 密钥库")
     if base == "wallet.dat" or "/wallets/" in p:
-        return "比特币系钱包"
+        return tr("比特币系钱包")
     if base.endswith(".keys"):
-        return "Monero 等钱包密钥文件"
-    return "钱包文件"
+        return tr("Monero 等钱包密钥文件")
+    return tr("钱包文件")
 
 
 _CLOUD_HINTS = (("onedrive", "OneDrive"), ("dropbox", "Dropbox"), ("mobile documents", "iCloud"),
                 ("icloud drive", "iCloud"), ("iclouddrive", "iCloud"), ("google drive", "Google Drive"),
-                ("googledrive", "Google Drive"), ("nutstore", "坚果云"), ("pcloud", "pCloud"),
-                ("baidunetdisk", "百度网盘"), ("/mega/", "MEGA"))
+                ("googledrive", "Google Drive"), ("nutstore", tr("坚果云")), ("pcloud", "pCloud"),
+                ("baidunetdisk", tr("百度网盘")), ("/mega/", "MEGA"))
 
 
 def cloud_hint(path):
@@ -328,7 +329,7 @@ def get_wordlist(force_reload=False):
     """返回 (words, index) 或 None（词表缺失/校验不通过）"""
     if _WL_CACHE["tried"] and not force_reload:
         return _WL_CACHE["val"]
-    _WL_CACHE.update(tried=True, val=None)
+    _WL_CACHE.update(tried=True, val=None, path=None)
     for p in wordlist_paths():
         try:
             words = p.read_text(encoding="utf-8").split()
@@ -336,8 +337,26 @@ def get_wordlist(force_reload=False):
             continue
         if validate_wordlist(words):
             _WL_CACHE["val"] = (words, {w: i for i, w in enumerate(words)})
+            _WL_CACHE["path"] = p
             break
     return _WL_CACHE["val"]
+
+
+def wordlist_info():
+    """词表状态（给界面“查看助记词表”用）"""
+    wl = get_wordlist()
+    if not wl:
+        return dict(loaded=False, searched=[str(p) for p in wordlist_paths()], url=_WORDLIST_URL)
+    path = Path(_WL_CACHE["path"])
+    mp = getattr(sys, "_MEIPASS", None)
+    if mp and str(path).startswith(str(mp)):
+        source = tr("内置于程序（打包时从官方仓库下载并校验）")
+    elif path.parent == APP_DIR:
+        source = tr("已下载到本机 ") + str(APP_DIR)
+    else:
+        source = tr("随源码目录提供")
+    return dict(loaded=True, path=str(path), source=source, count=len(wl[0]), words=wl[0], url=_WORDLIST_URL,
+                sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
 def download_wordlist():
@@ -346,35 +365,53 @@ def download_wordlist():
         req = urllib.request.Request(_WORDLIST_URL, headers={"User-Agent": "Faster"})
         text = urllib.request.urlopen(req, timeout=20).read().decode("utf-8")
     except Exception as e:
-        return False, f"下载失败：{e}"
+        return False, tr("下载失败：{0}", e)
     if not validate_wordlist(text.split()):
-        return False, "下载的词表未通过校验，已丢弃。"
+        return False, tr("下载的词表未通过校验，已丢弃。")
     APP_DIR.mkdir(parents=True, exist_ok=True)
     (APP_DIR / "bip39_english.txt").write_text(text, encoding="utf-8")
     get_wordlist(force_reload=True)
-    return True, "BIP39 词表已就绪（校验通过）。"
+    return True, tr("BIP39 词表已就绪（校验通过）。")
 
 
-KEY_CTX = re.compile(r"(private\s*key|priv[\s_\-]*key|secret\s*key|privkey|\bpk\b|私钥|密钥|signing\s*key)", re.I)
-SEED_CTX = re.compile(r"(seed\s*phrase|seed\s*words?|seed|mnemonic|recovery\s*phrase|backup\s*phrase|secret\s*recovery|助记词|恢复短语|备份短语|种子)", re.I)
-_HEX64 = re.compile(r"(?<![0-9A-Fa-f])(?:0x)?[0-9A-Fa-f]{64}(?![0-9A-Fa-f])")
+KEY_CTX = re.compile(r"(private\s*key|priv[\s_\-]*key|privkey|私钥|私匙|私鑰|密钥|密鑰|\bpk\b)", re.I)
+SEED_CTX = re.compile(r"(seed\s*phrase|seed\s*words?|recovery\s*phrase|backup\s*phrase|secret\s*recovery|mnemonic|"
+                      r"助记词|助記詞|恢复短语|备份短语|种子短语)", re.I)
+_SEP = "[\"'\\s:：=>\\-()\\[\\]]{0,8}"        # “关键词”和十六进制串之间允许的分隔符：  private_key = "0x…"
+_HEX_KEY = re.compile(r"(?:private[\s_\-]*key|priv[\s_\-]*key|privkey|私钥|私匙|私鑰|密钥|密鑰|\bpk\b)" + _SEP +
+                      r"(?:0x)?([0-9A-Fa-f]{64})(?![0-9A-Fa-f])", re.I)
 _B58_TOKEN = re.compile(r"(?<![1-9A-HJ-NP-Za-km-z])[1-9A-HJ-NP-Za-km-z]{51,111}(?![1-9A-HJ-NP-Za-km-z])")
 _SOL_ARRAY = re.compile(r"\[\s*(?:\d{1,3}\s*,\s*){63}\d{1,3}\s*\]")
+_SOL_CTX = re.compile(r"(secret|keypair|private|私钥|私匙)\w*[\"'\s:：=\(\[]{0,6}$", re.I)
 _WORD = re.compile(r"[A-Za-z]+")
-_HEUR_SEED = re.compile(r"[\s:：=\-\"'\[\(]*((?:\d{0,2}[.)、]?\s*[a-z]{3,8}[\s,，]+){11,23}[a-z]{3,8})", re.I)
 _XPRV_VERS = {bytes.fromhex("0488ADE4"): "xprv", bytes.fromhex("049D7878"): "yprv", bytes.fromhex("04B2430C"): "zprv",
               bytes.fromhex("04358394"): "tprv"}
-_NAME_HINT = re.compile(r"(seed|mnemonic|助记词|私钥|privatekey|private[_\- ]key|recovery[_\- ]?phrase|wallet[_\- ]?backup)", re.I)
+# 文件名提示：只针对“笔记/文档/图片”类文件，不再对代码文件按名字报（seed_utils.py 之类）
+_NAME_HINT = re.compile(r"(seed[\s_\-]*phrase|mnemonic|助记词|助記詞|私钥|私匙|私鑰|private[\s_\-]*key|"
+                        r"recovery[\s_\-]*phrase|wallet[\s_\-]*backup)", re.I)
+_KNOWN_TEST = {
+    "legal winner thank year wave sausage worth useful legal winner thank yellow",
+    "letter advice cage absurd amount doctor acoustic avoid letter advice cage above",
+    "test test test test test test test test test test test junk",                       # Hardhat / Anvil 默认
+    "myth like bonus scare over problem client lizard pioneer submit female collect",      # Ganache 默认
+}
+
+
+def is_known_test(tokens):
+    """公开的测试助记词（BIP39 测试向量、开发工具默认值）：不是真实资产，降为“提示”"""
+    return " ".join(tokens) in _KNOWN_TEST or (len(tokens) >= 12 and len(set(tokens[:-1])) == 1)
 
 
 def _line(text, pos):
     return text.count("\n", 0, pos) + 1
 
 
-def scan_text(text, wl=None):
-    """在文本里找助记词/私钥。返回 [(类型, 级别, 说明, 行号)]；不返回任何敏感内容本身"""
+def scan_text(text, wl=None, strict=False):
+    """在文本里找助记词/私钥。返回 [(类型, 级别, 说明, 行号)]；不返回任何敏感内容本身。
+    strict=True（代码/配置文件）：只报“校验通过”的强证据，不报“疑似”。
+    没有 BIP39 词表(wl=None)时不做助记词检测——宁可漏报，也不拿关键词瞎猜。"""
     out = []
-    # --- 明确格式的私钥：WIF / xprv / yprv / zprv（带校验位，几乎无误报）
+    # --- 带校验位的私钥：WIF / xprv / yprv / zprv（几乎无误报）
     for m in _B58_TOKEN.finditer(text):
         tok = m.group()
         payload = b58check_decode(tok)
@@ -382,36 +419,27 @@ def scan_text(text, wl=None):
             if 86 <= len(tok) <= 90 and KEY_CTX.search(text[max(0, m.start() - 80):m.start()]):
                 raw = b58decode(tok)
                 if raw and len(raw) == 64:
-                    out.append(("Solana 私钥", "高危", "Base58 编码的 64 字节密钥（附近有“私钥”字样）", _line(text, m.start())))
+                    out.append((tr("Solana 私钥"), tr("高危"), tr("Base58 编码的 64 字节密钥（紧挨着“私钥”字样）"), _line(text, m.start())))
             continue
         if tok[0] in "5KL" and len(tok) in (51, 52) and payload[0] == 0x80 and len(payload) in (33, 34):
-            out.append(("比特币私钥(WIF)", "高危", f"校验通过的 WIF 私钥，长度 {len(tok)}", _line(text, m.start())))
+            out.append((tr("比特币私钥(WIF)"), tr("高危"), tr("校验通过的 WIF 私钥，长度 {0}", len(tok)), _line(text, m.start())))
         elif len(payload) == 78 and payload[:4] in _XPRV_VERS:
-            out.append(("HD 钱包扩展私钥", "高危", f"校验通过的 {_XPRV_VERS[payload[:4]]}（可推出该钱包全部私钥）", _line(text, m.start())))
-    # --- Solana id.json：64 个 0~255 的整数数组
+            out.append((tr("HD 钱包扩展私钥"), tr("高危"), tr("校验通过的 {0}（可推出该钱包全部私钥）", _XPRV_VERS[payload[:4]]), _line(text, m.start())))
+    # --- Solana id.json：整个文件就是 64 字节数组，或数组紧跟 secret/keypair 字样（普通的数字表不报）
+    whole = text.strip()
     for m in _SOL_ARRAY.finditer(text):
         nums = [int(x) for x in re.findall(r"\d+", m.group())]
-        if len(nums) == 64 and max(nums) <= 255:
-            out.append(("Solana 密钥文件", "高危", "64 个字节的数组（solana-keygen 生成的 id.json 格式）", _line(text, m.start())))
-    # --- 64 位十六进制：必须附近出现“私钥/private key”之类字样才报，避免把哈希当私钥
-    for m in _HEX64.finditer(text):
-        ctx = text[max(0, m.start() - 60):m.start()] + text[m.end():m.end() + 20]
-        if KEY_CTX.search(ctx):
-            out.append(("疑似私钥(64位十六进制)", "高危", "64 位十六进制串，附近有“私钥/private key”字样", _line(text, m.start())))
-    # --- 助记词
+        if len(nums) == 64 and max(nums) <= 255 and (whole == m.group() or _SOL_CTX.search(text[max(0, m.start() - 40):m.start()])):
+            out.append((tr("Solana 密钥文件"), tr("高危"), tr("64 个字节的数组（solana-keygen 的 id.json 格式）"), _line(text, m.start())))
+    # --- 64 位十六进制：必须紧跟在“private key / 私钥”之类字样后面（哈希、常量表不会命中）
+    for m in _HEX_KEY.finditer(text):
+        out.append((tr("疑似私钥(64位十六进制)"), tr("高危"), tr("“私钥/private key”字样后紧跟 64 位十六进制串"), _line(text, m.start())))
     if wl:
-        out += _find_mnemonics_exact(text, wl)
-    else:
-        for m in SEED_CTX.finditer(text):
-            h = _HEUR_SEED.match(text[m.end():m.end() + 400])
-            if h:
-                n = len(re.findall(r"[A-Za-z]{3,8}", h.group(1)))
-                out.append(("疑似助记词", "中危", f"“助记词”字样后跟 {n} 个英文单词（未加载 BIP39 词表，未做校验）", _line(text, m.start())))
-                break
+        out += _find_mnemonics_exact(text, wl, strict)
     return out
 
 
-def _find_mnemonics_exact(text, wl):
+def _find_mnemonics_exact(text, wl, strict=False):
     words, index = wl
     toks = [(m.group().lower(), m.start(), m.end()) for m in _WORD.finditer(text)]
     out, i, n = [], 0, len(toks)
@@ -427,26 +455,35 @@ def _find_mnemonics_exact(text, wl):
         if 12 <= L <= 48:            # 超长的是“词表本身”之类，不是助记词
             hit = None
             for size in (24, 21, 18, 15, 12):
-                for s in range(0, L - size + 1):
-                    if mnemonic_valid([t[0] for t in run[s:s + size]], index):
-                        hit = (s, size)
+                for st in range(0, L - size + 1):
+                    if mnemonic_valid([t[0] for t in run[st:st + size]], index):
+                        hit = (st, size)
                         break
                 if hit:
                     break
             if hit:
-                out.append(("助记词(BIP39)", "高危", f"校验通过的 {hit[1]} 个单词助记词（可恢复整个钱包）", _line(text, run[hit[0]][1])))
-            elif L in (12, 15, 18, 21, 24) and SEED_CTX.search(text[max(0, run[0][1] - 200):run[0][1]]):
-                out.append(("疑似助记词", "中危", f"“助记词”字样后跟 {L} 个 BIP39 单词，但校验未通过（可能抄错了某个词）", _line(text, run[0][1])))
+                tk = [t[0] for t in run[hit[0]:hit[0] + hit[1]]]
+                ln = _line(text, run[hit[0]][1])
+                if is_known_test(tk):
+                    out.append((tr("已知测试助记词"), tr("提示"), tr("公开的测试助记词（BIP39 测试向量/开发工具默认值），不是你的资产"), ln))
+                else:
+                    out.append((tr("助记词(BIP39)"), tr("高危"), tr("校验通过的 {0} 个单词助记词（可恢复整个钱包）", hit[1]), ln))
+            elif not strict and L in (12, 15, 18, 21, 24) and SEED_CTX.search(text[max(0, run[0][1] - 200):run[0][1]]):
+                out.append((tr("疑似助记词"), tr("中危"), tr("“助记词”字样后跟 {0} 个 BIP39 单词，但校验未通过（可能抄错了某个词）", L), _line(text, run[0][1])))
         i = j
     return out
 
 
-_TEXT_EXT = {".txt", ".md", ".json", ".csv", ".log", ".rtf", ".html", ".htm", ".xml", ".yml", ".yaml", ".ini", ".conf",
-             ".cfg", ".env", ".js", ".ts", ".py", ".sh", ".bak", ".key", ".keys", ".backup", ".note", ".notes", ".text"}
+_TEXT_EXT = {".txt", ".md", ".csv", ".log", ".rtf", ".json", ".bak", ".key", ".keys", ".backup", ".note", ".notes",
+             ".text", ".env"}
+_CODE_EXT = {".py", ".js", ".ts", ".sh", ".html", ".htm", ".xml", ".yml", ".yaml", ".ini", ".conf", ".cfg"}
 _OFFICE_EXT = {".docx", ".xlsx", ".pptx"}
-_SECRET_SKIP = {"node_modules", ".git", "site-packages", "__pycache__", "$recycle.bin", "system volume information",
-                "windows", "program files", "program files (x86)", "programdata", "appdata", ".cache", "cache", "caches",
-                ".npm", ".cargo", ".rustup", ".gradle", ".m2", ".venv", "venv", ".trash", ".faster", ".pc_optimizer"}
+_HINT_EXT = {"", ".txt", ".md", ".doc", ".docx", ".xls", ".xlsx", ".pdf", ".png", ".jpg", ".jpeg", ".heic", ".rtf", ".csv",
+             ".pages", ".numbers", ".odt", ".json", ".bak", ".note", ".notes"}
+_SECRET_SKIP = {"node_modules", ".git", "site-packages", "dist-packages", "__pycache__", "$recycle.bin",
+                "system volume information", "windows", "program files", "program files (x86)", "programdata", "appdata",
+                ".cache", "cache", "caches", ".npm", ".cargo", ".rustup", ".gradle", ".m2", ".venv", "venv", ".trash",
+                "vendor", "bower_components", ".tox", ".mypy_cache", ".idea", ".vscode", ".faster", ".pc_optimizer"}
 
 
 def _read_text(fp, ext, size):
@@ -469,9 +506,10 @@ def _read_text(fp, ext, size):
         return None
 
 
-def scan_secrets(root, wl="auto", max_seconds=900):
-    """扫描 root 下的文本/Office 文件。返回 (findings, 已扫描文件数)；
-    findings: dict(path, kind, level, detail, line, cloud)"""
+def scan_secrets(root, wl="auto", max_seconds=900, include_code=False):
+    """扫描 root 下的文本/Office 文件。返回 (findings, 已扫描文件数)
+    findings: dict(path, kind, level, detail, line, cloud)
+    include_code=False（默认）不读 .py/.js/.sh/.html/.yml 等代码与配置文件，避免对源码误报。"""
     if wl == "auto":
         wl = get_wordlist()
     root, deadline = Path(root), time.time() + max_seconds
@@ -479,6 +517,9 @@ def scan_secrets(root, wl="auto", max_seconds=900):
     for r, dirs, files in os.walk(root, onerror=lambda e: None):
         if time.time() > deadline:
             break
+        if "pyvenv.cfg" in files:                       # Python 虚拟环境：整棵跳过
+            dirs[:] = []
+            continue
         if Path(r) == HOME / "Library":                 # macOS：只看 iCloud 云盘
             dirs[:] = [d for d in dirs if d == "Mobile Documents"]
         else:
@@ -488,10 +529,11 @@ def scan_secrets(root, wl="auto", max_seconds=900):
             fp = os.path.join(r, f)
             ext = os.path.splitext(f)[1].lower()
             cloud = cloud_hint(fp)
-            if _NAME_HINT.search(f):
-                res.append(dict(path=fp, kind="文件名可疑", level="提示", detail="文件名暗示里面可能存放助记词/私钥",
+            if ext in _HINT_EXT and _NAME_HINT.search(f):
+                res.append(dict(path=fp, kind=tr("文件名可疑"), level=tr("提示"), detail=tr("文件名暗示里面可能存放助记词/私钥"),
                                 line=0, cloud=cloud))
-            if ext not in _TEXT_EXT and ext not in _OFFICE_EXT:
+            is_code = ext in _CODE_EXT
+            if not (ext in _TEXT_EXT or ext in _OFFICE_EXT or (include_code and is_code)):
                 continue
             try:
                 size = os.path.getsize(fp)
@@ -503,11 +545,11 @@ def scan_secrets(root, wl="auto", max_seconds=900):
             scanned += 1
             if not text:
                 continue
-            for kind, level, detail, line in scan_text(text, wl):
-                if cloud:
-                    level, detail = "高危", detail + f"；位于 {cloud} 同步目录，云端可能已有副本"
+            for kind, level, detail, line in scan_text(text, wl, strict=is_code):
+                if cloud and level != tr("提示"):
+                    level, detail = tr("高危"), detail + tr("；位于 {0} 同步目录，云端可能已有副本", cloud)
                 res.append(dict(path=fp, kind=kind, level=level, detail=detail, line=line, cloud=cloud))
-    order = {"高危": 0, "中危": 1, "提示": 2}
+    order = {tr("高危"): 0, tr("中危"): 1, tr("提示"): 2}
     res.sort(key=lambda x: order[x["level"]])
     return res, scanned
 
@@ -526,7 +568,7 @@ _TMP_HINTS = ("/tmp/", "/var/tmp/", "/dev/shm/", "/appdata/local/temp/")
 def detect_miners(sample=3.0):
     """返回 dict(findings=[{level,msg,pid,name,cpu}], top=[(pid,name,cpu)])"""
     if not psutil:
-        return dict(findings=[dict(level="提示", msg="需要安装 psutil 才能检测挖矿进程（pip install psutil）", pid=None, name="", cpu=0)], top=[])
+        return dict(findings=[dict(level=tr("提示"), msg=tr("需要安装 psutil 才能检测挖矿进程（pip install psutil）"), pid=None, name="", cpu=0)], top=[])
     procs = []
     for p in psutil.process_iter(["pid", "name"]):
         try:
@@ -554,22 +596,24 @@ def detect_miners(sample=3.0):
                 exe = _norm(p.exe() or "")
             except Exception:
                 cmd, exe = "", ""
-            reasons = []
+            reasons, signature = [], False                      # signature：进程名/命令行命中（与界面语言无关的判断）
             if any(k in name.lower() for k in MINER_NAMES):
-                reasons.append("进程名匹配已知挖矿程序")
+                reasons.append(tr("进程名匹配已知挖矿程序"))
+                signature = True
             if MINER_CMD.search(cmd):
-                reasons.append("命令行含矿池地址/挖矿参数")
+                reasons.append(tr("命令行含矿池地址/挖矿参数"))
+                signature = True
             bad_ports = sorted(ports.get(p.pid, set()) & MINER_PORTS)
             if bad_ports:
-                reasons.append(f"连接常见矿池端口 {bad_ports}")
+                reasons.append(tr("连接常见矿池端口 {0}", bad_ports))
             in_tmp = any(h in exe for h in _TMP_HINTS)
             if cpu >= 70 and in_tmp:
-                reasons.append(f"CPU {cpu:.0f}% 且从临时目录运行")
+                reasons.append(tr("CPU {0:.0f}% 且从临时目录运行", cpu))
             if not reasons:
                 continue
-            strong = (reasons[0].startswith(("进程名", "命令行"))) or (bad_ports and cpu >= 30)
-            findings.append(dict(level="高危" if strong else "中危", pid=p.pid, name=name, cpu=cpu,
-                                 msg="；".join(reasons) + ("（若是你自己运行的矿工可忽略）" if strong else "")))
+            strong = signature or (bad_ports and cpu >= 30)
+            findings.append(dict(level=tr("高危") if strong else tr("中危"), pid=p.pid, name=name, cpu=cpu,
+                                 msg=tr("；").join(reasons) + (tr("（若是你自己运行的矿工可忽略）") if strong else "")))
         except Exception:
             pass
     top.sort(key=lambda x: -x[2])
@@ -602,14 +646,12 @@ class ClipboardGuard:
         if self.last and self.last[1] == kind and now - self.last[2] <= self.window:
             old = self.last[0]
             if lookalike(old, s):
-                alert = dict(level="高危", old=old, new=s,
-                             msg=f"剪贴板里的 {kind} 地址在 {now - self.last[2]:.0f} 秒内被换成了一个“首尾相同、中间不同”的地址"
-                                 f"（{mask_addr(old)} → {mask_addr(s)}），极可能是剪贴板劫持！请勿转账，并立即查杀。")
+                alert = dict(level=tr("高危"), old=old, new=s,
+                             msg=tr("剪贴板里的 {0} 地址在 {1:.0f} 秒内被换成了一个“首尾相同、中间不同”的地址（{2} → {3}），极可能是剪贴板劫持！请勿转账，并立即查杀。", kind, now - self.last[2], mask_addr(old), mask_addr(s)))
             else:
-                alert = dict(level="中危", old=old, new=s,
-                             msg=f"剪贴板里的 {kind} 地址在 {now - self.last[2]:.0f} 秒内变成了另一个地址"
-                                 f"（{mask_addr(old)} → {mask_addr(s)}）。如果这不是你自己的操作，请警惕。")
-        if alert and alert["level"] == "高危":
+                alert = dict(level=tr("中危"), old=old, new=s,
+                             msg=tr("剪贴板里的 {0} 地址在 {1:.0f} 秒内变成了另一个地址（{2} → {3}）。如果这不是你自己的操作，请警惕。", kind, now - self.last[2], mask_addr(old), mask_addr(s)))
+        if alert and alert["level"] == tr("高危"):
             self.suspect.add(s)          # 疑似劫持的地址：不计入“你复制过的地址”，也不更新基准
             return alert
         self.recent.append((s, kind, now))
@@ -622,15 +664,15 @@ class ClipboardGuard:
         s = (pasted or "").strip()
         kind = classify_address(s)
         if not kind:
-            return "提示", "这不是有效的区块链地址（格式或校验位不对）——请检查是否复制完整。"
+            return tr("提示"), tr("这不是有效的区块链地址（格式或校验位不对）——请检查是否复制完整。")
         if s in self.suspect:
-            return "高危", "这个地址之前被判定为“疑似替换”的地址，请勿使用，并立即查杀电脑。"
+            return tr("高危"), tr("这个地址之前被判定为“疑似替换”的地址，请勿使用，并立即查杀电脑。")
         cand = [a for a, k, t in self.recent if k == kind and now - t <= horizon]
         if s in cand:
-            return "正常", "与你最近复制的地址完全一致。"
+            return tr("正常"), tr("与你最近复制的地址完全一致。")
         if any(lookalike(a, s) for a in cand):
-            return "高危", "与你复制的地址首尾相同但中间不一致——疑似被替换（剪贴板劫持/地址投毒）。请重新复制并逐位核对。"
-        return "提示", "该地址不在最近 30 分钟的复制记录里（监控未开启或已过期），无法比对。"
+            return tr("高危"), tr("与你复制的地址首尾相同但中间不一致——疑似被替换（剪贴板劫持/地址投毒）。请重新复制并逐位核对。")
+        return tr("提示"), tr("该地址不在最近 30 分钟的复制记录里（监控未开启或已过期），无法比对。")
 
 
 # ============================================================ 5. 区块链数据目录识别
@@ -650,13 +692,13 @@ def known_chain_dirs():
         ("Litecoin Core", P(appdata / "Litecoin", sup / "Litecoin", H / ".litecoin"), ["blocks", "chainstate"], ["wallets", "wallet.dat"], ""),
         ("Dogecoin Core", P(appdata / "DogeCoin", sup / "Dogecoin", H / ".dogecoin"), ["blocks", "chainstate"], ["wallets", "wallet.dat"], ""),
         ("Ethereum (geth)", P(local / "Ethereum", H / "Library/Ethereum", H / ".ethereum"), ["geth/chaindata", "geth/lightchaindata", "geth/ethash"], ["keystore"], ""),
-        ("Monero", P(pdata / "bitmonero", H / ".bitmonero", H / ".bitmonero"), ["lmdb"], [], "钱包文件通常在别处，请先在 Monero 软件里确认钱包位置"),
-        ("IPFS (Kubo)", H / ".ipfs", ["blocks"], ["keystore", "config"], "blocks 里可能有只存在于本机的固定内容，删除前请确认"),
+        ("Monero", P(pdata / "bitmonero", H / ".bitmonero", H / ".bitmonero"), ["lmdb"], [], tr("钱包文件通常在别处，请先在 Monero 软件里确认钱包位置")),
+        ("IPFS (Kubo)", H / ".ipfs", ["blocks"], ["keystore", "config"], tr("blocks 里可能有只存在于本机的固定内容，删除前请确认")),
         ("Reth", None if IS_WIN else P(None, sup / "reth", H / ".local/share/reth"), ["db", "static_files"], [], ""),
         ("Erigon", None if IS_WIN else P(None, sup / "erigon", H / ".local/share/erigon"), ["chaindata", "snapshots"], ["nodekey"], ""),
-        ("Lighthouse", None if IS_WIN else H / ".lighthouse", ["mainnet/beacon"], ["validators", "secrets"], "validators/secrets 含验证者密钥，切勿删除"),
-        ("Electrum", P(appdata / "Electrum", H / ".electrum", H / ".electrum"), [], ["wallets"], "只有钱包，没有区块数据"),
-        ("Exodus", P(appdata / "Exodus", sup / "Exodus", H / ".config/Exodus"), [], ["exodus.wallet"], "只有钱包，没有区块数据"),
+        ("Lighthouse", None if IS_WIN else H / ".lighthouse", ["mainnet/beacon"], ["validators", "secrets"], tr("validators/secrets 含验证者密钥，切勿删除")),
+        ("Electrum", P(appdata / "Electrum", H / ".electrum", H / ".electrum"), [], ["wallets"], tr("只有钱包，没有区块数据")),
+        ("Exodus", P(appdata / "Exodus", sup / "Exodus", H / ".config/Exodus"), [], ["exodus.wallet"], tr("只有钱包，没有区块数据")),
     ]
     out = []
     for name, path, resync, wallet, note in specs:

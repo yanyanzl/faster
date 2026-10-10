@@ -18,7 +18,7 @@ Faster Faster  (Windows / macOS / Linux)
 
 依赖：Python 3.8+。可选：pip install psutil send2trash
 """
-__version__ = "0.2.0"
+__version__ = "0.2.2"
 
 import os
 import sys
@@ -34,6 +34,7 @@ import subprocess
 import datetime
 from pathlib import Path
 from collections import defaultdict
+from faster_i18n import tr  # noqa: E402
 
 try:
     import psutil
@@ -85,13 +86,13 @@ def human(n):
 
 def confirm(msg, default=False):
     s = input(f"{msg} [{'Y/n' if default else 'y/N'}] ").strip().lower()
-    return default if not s else s in ("y", "yes", "是", "好")
+    return default if not s else s in ("y", "yes", tr("是"), tr("好"))
 
 
 def parse_selection(s, n):
     """'1,3,5-8' / 'all' -> 0-based 下标集合"""
     s = s.strip().lower()
-    if s in ("all", "a", "全部"):
+    if s in ("all", "a", tr("全部")):
         return list(range(n))
     out = set()
     for tok in re.split(r"[,\s，]+", s):
@@ -144,7 +145,7 @@ def safe_remove(path):
     """进回收站；失败则移动到 ~/.faster/trash（可找回）。钱包文件一律拒绝"""
     path = str(path)
     if is_wallet_path(path):
-        print(f"   ✗ 已保护（钱包文件），不处理：{path}")
+        print(tr("   ✗ 已保护（钱包文件），不处理：{0}", path))
         return False
     try:
         if send2trash:
@@ -154,7 +155,7 @@ def safe_remove(path):
         shutil.move(path, dest)
         return True
     except Exception as e:
-        print(f"   ✗ 无法处理 {path}: {e}")
+        print(tr("   ✗ 无法处理 {0}: {1}", path, e))
         return False
 
 
@@ -167,24 +168,24 @@ def junk_targets():
     t = []
     if IS_WIN:
         local = Path(os.environ.get("LOCALAPPDATA", HOME / "AppData/Local"))
-        t += [("用户临时文件", Path(os.environ.get("TEMP", local / "Temp"))),
-              ("系统临时文件(需管理员)", Path(os.environ.get("WINDIR", "C:/Windows")) / "Temp"),
-              ("Windows 更新下载缓存(需管理员)", Path(os.environ.get("WINDIR", "C:/Windows")) / "SoftwareDistribution/Download"),
-              ("IE/Edge 旧缓存", local / "Microsoft/Windows/INetCache"),
-              ("Chrome 缓存", local / "Google/Chrome/User Data/Default/Cache"),
-              ("Chrome 代码缓存", local / "Google/Chrome/User Data/Default/Code Cache"),
-              ("Edge 缓存", local / "Microsoft/Edge/User Data/Default/Cache"),
-              ("Edge 代码缓存", local / "Microsoft/Edge/User Data/Default/Code Cache"),
-              ("崩溃转储", local / "CrashDumps")]
+        t += [(tr("用户临时文件"), Path(os.environ.get("TEMP", local / "Temp"))),
+              (tr("系统临时文件(需管理员)"), Path(os.environ.get("WINDIR", "C:/Windows")) / "Temp"),
+              (tr("Windows 更新下载缓存(需管理员)"), Path(os.environ.get("WINDIR", "C:/Windows")) / "SoftwareDistribution/Download"),
+              (tr("IE/Edge 旧缓存"), local / "Microsoft/Windows/INetCache"),
+              (tr("Chrome 缓存"), local / "Google/Chrome/User Data/Default/Cache"),
+              (tr("Chrome 代码缓存"), local / "Google/Chrome/User Data/Default/Code Cache"),
+              (tr("Edge 缓存"), local / "Microsoft/Edge/User Data/Default/Cache"),
+              (tr("Edge 代码缓存"), local / "Microsoft/Edge/User Data/Default/Code Cache"),
+              (tr("崩溃转储"), local / "CrashDumps")]
     elif IS_MAC:
-        t += [("用户应用缓存", HOME / "Library/Caches"),
-              ("用户日志", HOME / "Library/Logs"),
-              ("废纸篓", HOME / ".Trash")]
+        t += [(tr("用户应用缓存"), HOME / "Library/Caches"),
+              (tr("用户日志"), HOME / "Library/Logs"),
+              (tr("废纸篓"), HOME / ".Trash")]
     else:
-        t += [("用户缓存 ~/.cache", HOME / ".cache"),
-              ("回收站", HOME / ".local/share/Trash/files"),
-              ("回收站信息", HOME / ".local/share/Trash/info"),
-              ("缩略图缓存", HOME / ".thumbnails")]
+        t += [(tr("用户缓存 ~/.cache"), HOME / ".cache"),
+              (tr("回收站"), HOME / ".local/share/Trash/files"),
+              (tr("回收站信息"), HOME / ".local/share/Trash/info"),
+              (tr("缩略图缓存"), HOME / ".thumbnails")]
     return [(n, p) for n, p in t if p.exists()]
 
 
@@ -206,7 +207,7 @@ def list_files_in(path, min_age_hours=1):
 
 
 def clean_junk():
-    header("清理系统垃圾 / 缓存")
+    header(tr("清理系统垃圾 / 缓存"))
     targets = junk_targets()
     scanned = []
     for name, p in targets:
@@ -215,15 +216,15 @@ def clean_junk():
         scanned.append((name, p, files, size))
     scanned = [x for x in scanned if x[3] > 0]
     if not scanned:
-        print("没有发现可清理的垃圾文件。")
+        print(tr("没有发现可清理的垃圾文件。"))
         return
     scanned.sort(key=lambda x: -x[3])
     for i, (name, p, files, size) in enumerate(scanned, 1):
-        print(f"{i:>3}. {human(size):>10}  {name}  ({len(files)} 个文件)\n       {p}")
-    print(f"\n合计可释放：{human(sum(x[3] for x in scanned))}")
-    print("提示：清理浏览器缓存会让网页首次加载稍慢，但不会删除密码/书签。")
-    sel = parse_selection(input("输入要清理的编号（如 1,3 / all / 直接回车取消）："), len(scanned))
-    if not sel or not confirm(f"确认清理选中的 {len(sel)} 项？"):
+        print(tr("{0:>3}. {1:>10}  {2}  ({3} 个文件)\n       {4}", i, human(size), name, len(files), p))
+    print(tr("\n合计可释放：{0}", human(sum(x[3] for x in scanned))))
+    print(tr("提示：清理浏览器缓存会让网页首次加载稍慢，但不会删除密码/书签。"))
+    sel = parse_selection(input(tr("输入要清理的编号（如 1,3 / all / 直接回车取消）：")), len(scanned))
+    if not sel or not confirm(tr("确认清理选中的 {0} 项？", len(sel))):
         return
     freed = 0
     for i in sel:
@@ -233,15 +234,15 @@ def clean_junk():
                 freed += sz
             except OSError:
                 pass  # 正在使用/无权限，跳过
-    if IS_WIN and confirm("是否清空回收站？"):
+    if IS_WIN and confirm(tr("是否清空回收站？")):
         try:
             import ctypes
             ctypes.windll.shell32.SHEmptyRecycleBinW(None, None, 0x7)
         except Exception as e:
-            print("清空回收站失败：", e)
-    print(f"✔ 已释放约 {human(freed)}")
+            print(tr("清空回收站失败："), e)
+    print(tr("✔ 已释放约 {0}", human(freed)))
     if IS_LINUX:
-        print("提示：apt 缓存 / systemd 日志需 root，可手动执行 `sudo apt clean` 与 `sudo journalctl --vacuum-size=200M`")
+        print(tr("提示：apt 缓存 / systemd 日志需 root，可手动执行 `sudo apt clean` 与 `sudo journalctl --vacuum-size=200M`"))
 
 
 SKIP_DIR_NAMES = {"$recycle.bin", "system volume information", "windows", "program files",
@@ -274,51 +275,51 @@ def walk_user_files(root, min_size):
 
 
 def ask_root():
-    s = input(f"扫描目录（回车=用户主目录 {HOME}）：").strip().strip('"')
+    s = input(tr("扫描目录（回车=用户主目录 {0}）：", HOME)).strip().strip('"')
     p = Path(s) if s else HOME
     if not p.is_dir():
-        print("目录不存在。")
+        print(tr("目录不存在。"))
         return None
     return p
 
 
 def delete_selected(items):
     """items: [(path,size,...)]"""
-    sel = parse_selection(input("输入要删除的编号（如 1,3,5-8 / all / 回车取消）："), len(items))
+    sel = parse_selection(input(tr("输入要删除的编号（如 1,3,5-8 / all / 回车取消）：")), len(items))
     if not sel:
         return
     total = sum(items[i][1] for i in sel)
-    print(f"将处理 {len(sel)} 个文件，共 {human(total)}")
-    where = "回收站" if send2trash else f"{TRASH_DIR}（可手动找回）"
-    if not confirm(f"确认移动到 {where}？"):
+    print(tr("将处理 {0} 个文件，共 {1}", len(sel), human(total)))
+    where = tr("回收站") if send2trash else tr("{0}（可手动找回）", TRASH_DIR)
+    if not confirm(tr("确认移动到 {0}？", where)):
         return
     freed = 0
     for i in sel:
         if safe_remove(items[i][0]):
             freed += items[i][1]
-    print(f"✔ 已处理，释放约 {human(freed)}")
+    print(tr("✔ 已处理，释放约 {0}", human(freed)))
 
 
 def large_files():
-    header("大文件列表（从大到小，由你决定是否删除）")
+    header(tr("大文件列表（从大到小，由你决定是否删除）"))
     root = ask_root()
     if not root:
         return
     try:
-        mb = float(input("只显示大于多少 MB 的文件？(默认 100) ").strip() or 100)
-        top = int(input("最多显示多少个？(默认 50) ").strip() or 50)
+        mb = float(input(tr("只显示大于多少 MB 的文件？(默认 100) ")).strip() or 100)
+        top = int(input(tr("最多显示多少个？(默认 50) ")).strip() or 50)
     except ValueError:
         mb, top = 100, 50
-    print("扫描中，请稍候……")
+    print(tr("扫描中，请稍候……"))
     heap = heapq.nlargest(top, walk_user_files(root, int(mb * 1024 * 1024)), key=lambda x: x[1])
     if not heap:
-        print("没有找到符合条件的文件。")
+        print(tr("没有找到符合条件的文件。"))
         return
     now = time.time()
     for i, (fp, sz, mt) in enumerate(heap, 1):
         age = int((now - mt) / 86400)
-        print(f"{i:>3}. {human(sz):>10}  {age:>4}天前修改  {fp}")
-    print("\n⚠ 这些文件无法自动判断是否有用（可能是视频、虚拟机、安装包等），请自行甄别。")
+        print(tr("{0:>3}. {1:>10}  {2:>4}天前修改  {3}", i, human(sz), age, fp))
+    print(tr("\n⚠ 这些文件无法自动判断是否有用（可能是视频、虚拟机、安装包等），请自行甄别。"))
     delete_selected(heap)
 
 
@@ -337,11 +338,11 @@ def sha256(path, limit=None):
 
 
 def duplicate_files():
-    header("重复文件查找")
+    header(tr("重复文件查找"))
     root = ask_root()
     if not root:
         return
-    print("扫描中（>=1MB 的文件），请稍候……")
+    print(tr("扫描中（>=1MB 的文件），请稍候……"))
     by_size = defaultdict(list)
     for fp, sz, mt in walk_user_files(root, 1024 * 1024):
         by_size[sz].append((fp, mt))
@@ -364,17 +365,17 @@ def duplicate_files():
                     full[h].append((fp, mt))
             groups += [(sz, g) for g in full.values() if len(g) > 1]
     if not groups:
-        print("没有发现重复文件。")
+        print(tr("没有发现重复文件。"))
         return
     groups.sort(key=lambda x: -x[0] * (len(x[1]) - 1))
     candidates = []
     for gi, (sz, g) in enumerate(groups[:40], 1):
         g.sort(key=lambda x: (len(x[0]), x[1]))  # 保留路径最短/最早的一个
-        print(f"\n[组{gi}] 每个 {human(sz)}，保留：{g[0][0]}")
+        print(tr("\n[组{0}] 每个 {1}，保留：{2}", gi, human(sz), g[0][0]))
         for fp, _ in g[1:]:
             candidates.append((fp, sz))
-            print(f"  {len(candidates):>3}. 副本：{fp}")
-    print(f"\n删除全部副本可释放：{human(sum(s for _, s in candidates))}")
+            print(tr("  {0:>3}. 副本：{1}", len(candidates), fp))
+    print(tr("\n删除全部副本可释放：{0}", human(sum(s for _, s in candidates))))
     delete_selected(candidates)
 
 
@@ -427,7 +428,7 @@ def get_startup_items():
                         pl = plistlib.loads(f.read_bytes())
                         cmd = pl.get("Program") or " ".join(pl.get("ProgramArguments", []))
                     except Exception:
-                        cmd = "(无法解析)"
+                        cmd = tr("(无法解析)")
                     items.append(dict(kind="launchd", name=f.stem, cmd=cmd, path=str(f)))
     else:
         for d, own in ((HOME / ".config/autostart", True), (Path("/etc/xdg/autostart"), False)):
@@ -473,25 +474,25 @@ def disable_startup(it):
         save_manifest(m)
         return True
     except Exception as e:
-        print(f"   ✗ 停用失败（可能需要管理员权限）：{e}")
+        print(tr("   ✗ 停用失败（可能需要管理员权限）：{0}", e))
         return False
 
 
 def startup_manager():
-    header("开机启动项管理（停用可随时恢复）")
+    header(tr("开机启动项管理（停用可随时恢复）"))
     items = get_startup_items()
     if not items:
-        print("没有发现启动项。")
+        print(tr("没有发现启动项。"))
     else:
         for i, it in enumerate(items, 1):
             print(f"{i:>3}. {it['name']}\n       {it['cmd'][:110]}")
-        print("\n建议停用：更新检查器、云盘/聊天工具自启、各类“助手/管家”。杀毒软件、输入法、驱动相关请保留。")
-        sel = parse_selection(input("输入要停用的编号（回车跳过）："), len(items))
-        if sel and confirm(f"确认停用 {len(sel)} 个启动项？"):
+        print(tr("\n建议停用：更新检查器、云盘/聊天工具自启、各类“助手/管家”。杀毒软件、输入法、驱动相关请保留。"))
+        sel = parse_selection(input(tr("输入要停用的编号（回车跳过）：")), len(items))
+        if sel and confirm(tr("确认停用 {0} 个启动项？", len(sel))):
             for i in sel:
                 if disable_startup(items[i]):
-                    print(f"   ✔ 已停用 {items[i]['name']}")
-    if load_manifest() and confirm("是否查看/恢复已停用的启动项？"):
+                    print(tr("   ✔ 已停用 {0}", items[i]['name']))
+    if load_manifest() and confirm(tr("是否查看/恢复已停用的启动项？")):
         restore_startup()
 
 
@@ -499,11 +500,11 @@ def restore_startup():
     m = load_manifest()
     active = [e for e in m if not e.get("restored")]
     if not active:
-        print("没有可恢复的项目。")
+        print(tr("没有可恢复的项目。"))
         return
     for i, e in enumerate(active, 1):
         print(f"{i:>3}. {e.get('name')}  ({datetime.datetime.fromtimestamp(e['ts']):%Y-%m-%d %H:%M})")
-    for i in parse_selection(input("输入要恢复的编号："), len(active)):
+    for i in parse_selection(input(tr("输入要恢复的编号：")), len(active)):
         e = active[i]
         try:
             if e["type"] == "reg":
@@ -518,9 +519,9 @@ def restore_startup():
             elif e["type"] == "file_created":
                 os.remove(e["path"])
             e["restored"] = True
-            print(f"   ✔ 已恢复 {e['name']}")
+            print(tr("   ✔ 已恢复 {0}", e['name']))
         except Exception as ex:
-            print(f"   ✗ 恢复失败：{ex}")
+            print(tr("   ✗ 恢复失败：{0}", ex))
     save_manifest(m)
 
 
@@ -540,9 +541,9 @@ PROTECTED = {
 
 
 def process_manager():
-    header("后台进程管理（仅显示当前用户的非系统关键进程）")
+    header(tr("后台进程管理（仅显示当前用户的非系统关键进程）"))
     if not psutil:
-        print("需要 psutil 库：请先执行  pip install psutil")
+        print(tr("需要 psutil 库：请先执行  pip install psutil"))
         return
     prot = PROTECTED["win" if IS_WIN else "mac" if IS_MAC else "linux"]
     me, my_pid = psutil.Process().username(), os.getpid()
@@ -565,21 +566,21 @@ def process_manager():
             pass
     rows.sort(key=lambda x: -x[1])
     rows = rows[:30]
-    print(f"{'编号':>3}  {'PID':>7}  {'内存':>9}  {'CPU%':>5}  名称")
+    print(tr("{0:>3}  {1:>7}  {2:>9}  {3:>5}  名称", tr("编号"), 'PID', tr("内存"), 'CPU%'))
     for i, (p, mem, cpu) in enumerate(rows, 1):
         print(f"{i:>3}  {p.pid:>7}  {human(mem):>9}  {cpu:>5.1f}  {p.info['name']}")
-    print("\n⚠ 结束进程会丢失该程序未保存的数据；系统关键进程已自动隐藏。")
-    sel = parse_selection(input("输入要结束的编号（回车跳过）："), len(rows))
-    if not sel or not confirm(f"确认结束 {len(sel)} 个进程？"):
+    print(tr("\n⚠ 结束进程会丢失该程序未保存的数据；系统关键进程已自动隐藏。"))
+    sel = parse_selection(input(tr("输入要结束的编号（回车跳过）：")), len(rows))
+    if not sel or not confirm(tr("确认结束 {0} 个进程？", len(sel))):
         return
     for i in sel:
         p = rows[i][0]
         try:
             p.terminate()
             p.wait(3)
-            print(f"   ✔ 已结束 {p.info['name']}")
+            print(tr("   ✔ 已结束 {0}", p.info['name']))
         except psutil.TimeoutExpired:
-            print(f"   … {p.info['name']} 未响应，未强制结束（可在任务管理器中手动处理）")
+            print(tr("   … {0} 未响应，未强制结束（可在任务管理器中手动处理）", p.info['name']))
         except Exception as e:
             print(f"   ✗ {p.info['name']}: {e}")
 
@@ -646,29 +647,29 @@ def installed_programs():
 
 
 def uninstall_programs():
-    header("卸载不需要的程序（按占用空间从大到小）")
+    header(tr("卸载不需要的程序（按占用空间从大到小）"))
     apps = installed_programs()
     if not apps:
-        print("未获取到已安装程序列表。")
+        print(tr("未获取到已安装程序列表。"))
         return
     apps = apps[:80]
     for i, a in enumerate(apps, 1):
-        print(f"{i:>3}. {human(a['size']) if a['size'] else '未知':>10}  {a['name']}")
-    print("\n⚠ 请只卸载你确认不需要的软件；驱动、运行库(VC++/.NET)、安全软件请保留。")
-    sel = parse_selection(input("输入要卸载的编号（回车跳过）："), len(apps))
+        print(f"{i:>3}. {human(a['size']) if a['size'] else tr("未知"):>10}  {a['name']}")
+    print(tr("\n⚠ 请只卸载你确认不需要的软件；驱动、运行库(VC++/.NET)、安全软件请保留。"))
+    sel = parse_selection(input(tr("输入要卸载的编号（回车跳过）：")), len(apps))
     for i in sel:
         a = apps[i]
-        if not confirm(f"卸载 {a['name']}？"):
+        if not confirm(tr("卸载 {0}？", a['name'])):
             continue
         if IS_MAC:
             if safe_remove(a["path"]):
-                print("   ✔ 已移入废纸篓（如有残留可清理 ~/Library/Application Support 中对应目录）")
+                print(tr("   ✔ 已移入废纸篓（如有残留可清理 ~/Library/Application Support 中对应目录）"))
         elif IS_WIN:
-            print("   → 正在启动该软件自带的卸载程序，请在弹出的窗口中完成……")
+            print(tr("   → 正在启动该软件自带的卸载程序，请在弹出的窗口中完成……"))
             subprocess.Popen(a["cmd"], shell=True)
         else:
-            print(f"   将执行：{a['cmd']}")
-            if confirm("确认执行？"):
+            print(tr("   将执行：{0}", a['cmd']))
+            if confirm(tr("确认执行？")):
                 subprocess.call(a["cmd"], shell=True)
 
 
@@ -692,7 +693,7 @@ def add(level, msg):
 
 def scan_processes():
     if not psutil:
-        add("提示", "未安装 psutil，跳过进程与端口检查（pip install psutil）")
+        add(tr("提示"), tr("未安装 psutil，跳过进程与端口检查（pip install psutil）"))
         return
     for p in psutil.process_iter(["pid", "name", "exe"]):
         try:
@@ -700,11 +701,11 @@ def scan_processes():
             nm = (p.info["name"] or "").lower()
             low = exe.lower().replace("/", "\\") if IS_WIN else exe.lower()
             if IS_WIN and nm in WIN_SYSTEM_PROCS and exe and not low.startswith(r"c:\windows\system32"):
-                add("高危", f"进程 {nm} (PID {p.pid}) 伪装成系统进程，实际路径：{exe}")
+                add(tr("高危"), tr("进程 {0} (PID {1}) 伪装成系统进程，实际路径：{2}", nm, p.pid, exe))
             elif any(d in exe.lower() for d in SUSP_DIRS[:4]) and exe:
-                add("中危", f"进程 {nm} (PID {p.pid}) 从临时目录运行：{exe}")
+                add(tr("中危"), tr("进程 {0} (PID {1}) 从临时目录运行：{2}", nm, p.pid, exe))
             elif IS_LINUX and "(deleted)" in exe:
-                add("高危", f"进程 {nm} (PID {p.pid}) 的程序文件已被删除但仍在运行（常见于恶意程序）")
+                add(tr("高危"), tr("进程 {0} (PID {1}) 的程序文件已被删除但仍在运行（常见于恶意程序）", nm, p.pid))
         except Exception:
             pass
     try:
@@ -716,49 +717,49 @@ def scan_processes():
                     name, exe = pr.name(), pr.exe()
                 except Exception:
                     pass
-                lvl = "高危" if c.laddr.port in BAD_PORTS else "提示"
-                add(lvl, f"对外监听端口 {c.laddr.port}：{name or '未知进程'} {exe}")
+                lvl = tr("高危") if c.laddr.port in BAD_PORTS else tr("提示")
+                add(lvl, tr("对外监听端口 {0}：{1} {2}", c.laddr.port, name or tr("未知进程"), exe))
     except (psutil.AccessDenied, PermissionError):
-        add("提示", "读取网络连接需要管理员/root 权限，已跳过端口检查（可用管理员身份重新运行）")
+        add(tr("提示"), tr("读取网络连接需要管理员/root 权限，已跳过端口检查（可用管理员身份重新运行）"))
 
 
 def scan_persistence():
     for it in get_startup_items():
         if SUSP_CMD.search(it["cmd"]):
-            add("高危", f"可疑启动项 [{it['name']}]：{it['cmd'][:140]}")
+            add(tr("高危"), tr("可疑启动项 [{0}]：{1}", it['name'], it['cmd'][:140]))
     if IS_WIN:
         rc, out, _ = run(["schtasks", "/query", "/fo", "csv", "/v"], timeout=90)
         if rc == 0:
             for row in csv.DictReader(out.splitlines()):
                 cmd = row.get("Task To Run") or row.get("要运行的任务") or ""
                 if cmd and SUSP_CMD.search(cmd):
-                    add("中危", f"可疑计划任务 [{row.get('TaskName') or row.get('任务名')}]：{cmd[:140]}")
+                    add(tr("中危"), tr("可疑计划任务 [{0}]：{1}", row.get('TaskName') or row.get("任务名"), cmd[:140]))
     else:
         rc, out, _ = run(["crontab", "-l"])
         if rc == 0:
             for ln in out.splitlines():
                 if not ln.strip().startswith("#") and SUSP_CMD.search(ln):
-                    add("高危", f"可疑 crontab 条目：{ln.strip()[:140]}")
+                    add(tr("高危"), tr("可疑 crontab 条目：{0}", ln.strip()[:140]))
         for f in (HOME / ".bashrc", HOME / ".zshrc", HOME / ".profile", HOME / ".bash_profile", HOME / ".zprofile"):
             try:
                 for ln in f.read_text(errors="replace").splitlines():
                     if not ln.strip().startswith("#") and SUSP_CMD.search(ln):
-                        add("中危", f"{f.name} 中含可疑命令：{ln.strip()[:140]}")
+                        add(tr("中危"), tr("{0} 中含可疑命令：{1}", f.name, ln.strip()[:140]))
             except OSError:
                 pass
         ak = HOME / ".ssh/authorized_keys"
         if ak.exists():
             n = sum(1 for l in ak.read_text(errors="replace").splitlines() if l.strip() and not l.startswith("#"))
             if n:
-                add("提示", f"{ak} 中有 {n} 个 SSH 公钥可免密登录本机，请确认都是你自己的")
+                add(tr("提示"), tr("{0} 中有 {1} 个 SSH 公钥可免密登录本机，请确认都是你自己的", ak, n))
         if IS_LINUX:
             if Path("/etc/ld.so.preload").exists():
-                add("高危", "/etc/ld.so.preload 存在（可被 rootkit 利用），请核对其内容")
+                add(tr("高危"), tr("/etc/ld.so.preload 存在（可被 rootkit 利用），请核对其内容"))
             for d in (HOME / ".config/systemd/user",):
                 if d.is_dir():
                     for f in d.glob("*.service"):
                         if SUSP_CMD.search(f.read_text(errors="replace")):
-                            add("中危", f"用户级 systemd 服务含可疑命令：{f}")
+                            add(tr("中危"), tr("用户级 systemd 服务含可疑命令：{0}", f))
         if IS_MAC:
             d = Path("/Library/LaunchDaemons")
             if d.is_dir():
@@ -766,7 +767,7 @@ def scan_persistence():
                     if not f.name.startswith("com.apple."):
                         try:
                             if SUSP_CMD.search(f.read_text(errors="replace")):
-                                add("中危", f"可疑 LaunchDaemon：{f}")
+                                add(tr("中危"), tr("可疑 LaunchDaemon：{0}", f))
                         except OSError:
                             pass
 
@@ -779,7 +780,7 @@ def scan_hosts():
             parts = ln.split()
             if len(parts) >= 2 and parts[0] not in ("127.0.0.1", "::1", "0.0.0.0", "255.255.255.255", "::",
                                                      "fe80::1%lo0", "ff02::1", "ff02::2"):
-                add("中危", f"hosts 文件将 {parts[1]} 指向 {parts[0]}（可能被劫持，请确认是否为你自己设置）")
+                add(tr("中危"), tr("hosts 文件将 {0} 指向 {1}（可能被劫持，请确认是否为你自己设置）", parts[1], parts[0]))
     except OSError:
         pass
 
@@ -794,7 +795,7 @@ def scan_temp_executables():
             continue
         for fp, _, mt in walk_user_files_any(d):
             if os.path.splitext(fp)[1].lower() in EXEC_EXT and mt > cutoff:
-                add("中危", f"临时目录中的可执行/脚本文件：{fp}")
+                add(tr("中危"), tr("临时目录中的可执行/脚本文件：{0}", fp))
                 hits += 1
                 if hits >= 30:
                     return
@@ -817,123 +818,137 @@ def scan_security_posture():
                           "AntivirusSignatureAge | Format-List"], timeout=30)
         if rc == 0 and out.strip():
             if re.search(r"RealTimeProtectionEnabled\s*:\s*False", out):
-                add("中危", "Windows Defender 实时保护未开启（若已安装其它杀毒软件可忽略）")
+                add(tr("中危"), tr("Windows Defender 实时保护未开启（若已安装其它杀毒软件可忽略）"))
             m = re.search(r"AntivirusSignatureAge\s*:\s*(\d+)", out)
             if m and int(m.group(1)) > 7:
-                add("中危", f"病毒库已 {m.group(1)} 天未更新")
+                add(tr("中危"), tr("病毒库已 {0} 天未更新", m.group(1)))
         rc, out, _ = run(["netsh", "advfirewall", "show", "allprofiles", "state"])
         if re.search(r"OFF|关闭", out):
-            add("中危", "Windows 防火墙有配置文件处于关闭状态")
+            add(tr("中危"), tr("Windows 防火墙有配置文件处于关闭状态"))
     elif IS_MAC:
         _, out, _ = run(["spctl", "--status"])
         if "disabled" in out:
-            add("高危", "Gatekeeper 已被关闭，系统会运行未签名程序")
+            add(tr("高危"), tr("Gatekeeper 已被关闭，系统会运行未签名程序"))
         _, out, _ = run(["csrutil", "status"])
         if "disabled" in out:
-            add("中危", "SIP（系统完整性保护）已关闭")
+            add(tr("中危"), tr("SIP（系统完整性保护）已关闭"))
         _, out, _ = run(["defaults", "read", "/Library/Preferences/com.apple.alf", "globalstate"])
         if out.strip() == "0":
-            add("提示", "macOS 防火墙未开启")
+            add(tr("提示"), tr("macOS 防火墙未开启"))
     else:
         if shutil.which("systemctl"):
             _, out, _ = run(["systemctl", "is-active", "ufw"])
             _, out2, _ = run(["systemctl", "is-active", "firewalld"])
             if "active" not in (out.strip(), out2.strip()) and "active\n" not in (out + out2):
-                add("提示", "未检测到 ufw / firewalld 防火墙在运行")
+                add(tr("提示"), tr("未检测到 ufw / firewalld 防火墙在运行"))
 
 
 def av_engine_scan():
     if IS_WIN:
-        if confirm("使用 Windows Defender 执行快速扫描？（可能需要几分钟）", True):
+        if confirm(tr("使用 Windows Defender 执行快速扫描？（可能需要几分钟）"), True):
             subprocess.call(["powershell", "-NoProfile", "-Command", "Update-MpSignature; Start-MpScan -ScanType QuickScan"])
-            print("扫描完成，可在“Windows 安全中心 -> 病毒和威胁防护”查看结果。")
+            print(tr("扫描完成，可在“Windows 安全中心 -> 病毒和威胁防护”查看结果。"))
     elif shutil.which("clamscan"):
-        s = input("ClamAV 扫描目录（回车=用户主目录）：").strip() or str(HOME)
-        if confirm(f"用 ClamAV 扫描 {s}？"):
+        s = input(tr("ClamAV 扫描目录（回车=用户主目录）：")).strip() or str(HOME)
+        if confirm(tr("用 ClamAV 扫描 {0}？", s)):
             subprocess.call(["clamscan", "-r", "-i", s])
     else:
-        print("未找到杀毒引擎。建议：")
+        print(tr("未找到杀毒引擎。建议："))
         if IS_MAC:
-            print("  macOS 内置 XProtect 会自动运行；如需按需扫描可安装 ClamAV（brew install clamav）或 Malwarebytes。")
+            print(tr("  macOS 内置 XProtect 会自动运行；如需按需扫描可安装 ClamAV（brew install clamav）或 Malwarebytes。"))
         else:
-            print("  安装 ClamAV：sudo apt install clamav && sudo freshclam；rootkit 检测可用 rkhunter / chkrootkit。")
+            print(tr("  安装 ClamAV：sudo apt install clamav && sudo freshclam；rootkit 检测可用 rkhunter / chkrootkit。"))
 
 
 def security_scan():
-    header("潜在风险扫描")
+    header(tr("潜在风险扫描"))
     if not is_admin():
-        print("ℹ 当前非管理员权限，部分检查（端口归属、系统级项目）可能不完整。")
+        print(tr("ℹ 当前非管理员权限，部分检查（端口归属、系统级项目）可能不完整。"))
     findings.clear()
-    steps = [("运行中的进程与网络端口", scan_processes), ("启动项 / 计划任务 / 持久化", scan_persistence),
-             ("hosts 文件", scan_hosts), ("临时目录中的可执行文件", scan_temp_executables),
-             ("系统安全防护状态", scan_security_posture)]
+    steps = [(tr("运行中的进程与网络端口"), scan_processes), (tr("启动项 / 计划任务 / 持久化"), scan_persistence),
+             (tr("hosts 文件"), scan_hosts), (tr("临时目录中的可执行文件"), scan_temp_executables),
+             (tr("系统安全防护状态"), scan_security_posture)]
     for label, fn in steps:
-        print(f"→ 检查：{label} ……")
+        print(tr("→ 检查：{0} ……", label))
         try:
             fn()
         except Exception as e:
-            add("提示", f"检查“{label}”时出错：{e}")
-    order = {"高危": 0, "中危": 1, "提示": 2}
+            add(tr("提示"), tr("检查“{0}”时出错：{1}", label, e))
+    order = {tr("高危"): 0, tr("中危"): 1, tr("提示"): 2}
     findings.sort(key=lambda x: order[x[0]])
-    lines = [f"[{lv}] {msg}" for lv, msg in findings] or ["未发现明显异常。"]
-    print("\n---------- 扫描结果 ----------")
+    lines = [f"[{lv}] {msg}" for lv, msg in findings] or [tr("未发现明显异常。")]
+    print(tr("\n---------- 扫描结果 ----------"))
     print("\n".join(lines))
     rp = REPORT_DIR / f"security_{datetime.datetime.now():%Y%m%d_%H%M%S}.txt"
     rp.write_text("\n".join(lines), encoding="utf-8")
-    print(f"\n报告已保存：{rp}")
-    print("说明：以上为启发式检测，“中危/提示”多数是需要你人工确认的项目，并不等于中毒；")
-    print("      对“高危”项请先核实来源，再考虑处理（可在启动项菜单中停用，或断网后用杀毒软件深度查杀）。")
+    print(tr("\n报告已保存：{0}", rp))
+    print(tr("说明：以上为启发式检测，“中危/提示”多数是需要你人工确认的项目，并不等于中毒；"))
+    print(tr("      对“高危”项请先核实来源，再考虑处理（可在启动项菜单中停用，或断网后用杀毒软件深度查杀）。"))
     av_engine_scan()
 
 
 # ------------------------------------------------------------------ 主程序
 def health_check():
-    header("一键体检（只检查，不做任何修改）")
+    header(tr("一键体检（只检查，不做任何修改）"))
     total = sum(sum(s for _, s in list_files_in(p)) for _, p in junk_targets())
-    print(f"可清理垃圾：约 {human(total)}")
-    print(f"开机启动项：{len(get_startup_items())} 个")
+    print(tr("可清理垃圾：约 {0}", human(total)))
+    print(tr("开机启动项：{0} 个", len(get_startup_items())))
     if psutil:
         vm = psutil.virtual_memory()
         du = shutil.disk_usage(HOME)
-        print(f"内存使用：{vm.percent}%   磁盘使用：{du.used / du.total * 100:.0f}% （剩余 {human(du.free)}）")
-    print("建议依次进入对应菜单处理。")
+        print(tr("内存使用：{0}%   磁盘使用：{1:.0f}% （剩余 {2}）", vm.percent, du.used / du.total * 100, human(du.free)))
+    print(tr("建议依次进入对应菜单处理。"))
+
+
+def choose_language():
+    """命令行：选择界面语言（保存后下次启动生效）"""
+    import faster_i18n as i18n
+    print(tr("当前语言：{0}", i18n.LANGUAGES.get(i18n.LANG, i18n.LANG)))
+    opts = ["auto"] + list(i18n.LANGUAGES)
+    for n, code in enumerate(opts, 1):
+        print(f"  {n}. {tr('跟随系统') if code == 'auto' else i18n.LANGUAGES[code]}")
+    sel = input(tr("请选择语言编号（回车取消）：")).strip()
+    if sel.isdigit() and 1 <= int(sel) <= len(opts):
+        i18n.save_language(opts[int(sel) - 1])
+        print(tr("已保存，重新启动程序后生效。"))
 
 
 def menu():
-    print(f"\nFaster v{__version__} | 系统：{SYSTEM} {platform.release()} | 权限：{'管理员' if is_admin() else '普通用户'}")
+    print(tr("\nFaster v{0} | 系统：{1} {2} | 权限：{3}", __version__, SYSTEM, platform.release(), tr("管理员") if is_admin() else tr("普通用户")))
     if not psutil:
-        print("提示：安装 psutil 可解锁进程管理与端口检查（pip install psutil）")
+        print(tr("提示：安装 psutil 可解锁进程管理与端口检查（pip install psutil）"))
     if not send2trash:
-        print(f"提示：未安装 send2trash，被删除的文件将移动到 {TRASH_DIR}（可找回）")
+        print(tr("提示：未安装 send2trash，被删除的文件将移动到 {0}（可找回）", TRASH_DIR))
     actions = {
-        "1": ("清理系统垃圾 / 缓存", clean_junk),
-        "2": ("大文件列表（大→小，自选删除）", large_files),
-        "3": ("重复文件查找", duplicate_files),
-        "4": ("开机启动项管理", startup_manager),
-        "5": ("后台进程管理", process_manager),
-        "6": ("卸载不需要的程序", uninstall_programs),
-        "7": ("潜在风险扫描（病毒/后门迹象）", security_scan),
-        "8": ("一键体检（仅检查）", health_check),
+        "1": (tr("清理系统垃圾 / 缓存"), clean_junk),
+        "2": (tr("大文件列表（大→小，自选删除）"), large_files),
+        "3": (tr("重复文件查找"), duplicate_files),
+        "4": (tr("开机启动项管理"), startup_manager),
+        "5": (tr("后台进程管理"), process_manager),
+        "6": (tr("卸载不需要的程序"), uninstall_programs),
+        "7": (tr("潜在风险扫描（病毒/后门迹象）"), security_scan),
+        "8": (tr("一键体检（仅检查）"), health_check),
+        "9": (tr("语言 / Language"), choose_language),
     }
     while True:
         print("\n" + "-" * 40)
         for k, (n, _) in actions.items():
             print(f"  {k}. {n}")
-        print("  0. 退出")
-        c = input("请选择：").strip()
+        print(tr("  0. 退出"))
+        c = input(tr("请选择：")).strip()
         if c == "0":
             break
         if c in actions:
             try:
                 actions[c][1]()
             except KeyboardInterrupt:
-                print("\n已取消。")
+                print(tr("\n已取消。"))
             except Exception as e:
-                print(f"出错：{e}")
+                print(tr("出错：{0}", e))
 
 
 if __name__ == "__main__":
     try:
         menu()
     except (KeyboardInterrupt, EOFError):
-        print("\n再见！")
+        print(tr("\n再见！"))

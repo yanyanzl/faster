@@ -2,6 +2,7 @@
 """v0.2 钱包功能单元测试：python -m unittest discover -s tests -v"""
 import os, sys, hashlib, tempfile, unittest
 from pathlib import Path
+os.environ["FASTER_LANG"] = "zh"            # 这些测试按中文界面断言
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import faster_crypto as fc
 
@@ -81,11 +82,10 @@ class T(unittest.TestCase):
         sol = "[" + ",".join(str(i * 3 % 256) for i in range(64)) + "]"
         self.assertTrue(any(k == "Solana 密钥文件" for k, *_ in fc.scan_text(sol, None)))
 
-    def test_heuristic_seed_without_wordlist(self):
+    def test_no_wordlist_means_no_mnemonic_guessing(self):
         t = "seed phrase: " + " ".join(["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
                                           "india", "juliet", "kilo", "lima"])
-        self.assertTrue(any(k == "疑似助记词" for k, *_ in fc.scan_text(t, None)))
-        self.assertEqual(fc.scan_text("今天吃饭 seed 数据库迁移完成", None), [])
+        self.assertEqual(fc.scan_text(t, None), [])      # 宁可漏报，也不拿关键词瞎猜
 
     def test_scan_secrets_tree(self):
         wl = fake_wordlist()
@@ -94,15 +94,61 @@ class T(unittest.TestCase):
             m = " ".join(fc.entropy_to_mnemonic(os.urandom(32), wl[0]))
             (d / "notes.txt").write_text("recovery phrase\n" + m, encoding="utf-8")
             (d / "OneDrive").mkdir(); (d / "OneDrive" / "a.txt").write_text(m, encoding="utf-8")
-            (d / "seed.txt").write_text("nothing here, just a hint by file name", encoding="utf-8")
+            (d / "mnemonic backup.txt").write_text("nothing here, just a hint by file name", encoding="utf-8")
             (d / "node_modules").mkdir(); (d / "node_modules" / "x.txt").write_text(m, encoding="utf-8")
             res, n = fc.scan_secrets(d, wl)
             paths = {Path(r["path"]).name + ":" + r["kind"] for r in res}
             self.assertIn("notes.txt:助记词(BIP39)", paths)
             self.assertIn("a.txt:助记词(BIP39)", paths)
-            self.assertIn("seed.txt:文件名可疑", paths)
+            self.assertIn("mnemonic backup.txt:文件名可疑", paths)
             self.assertFalse(any("node_modules" in r["path"] for r in res))
             self.assertTrue(any(r["cloud"] == "OneDrive" and r["level"] == "高危" for r in res))
+
+    def test_no_false_positives_on_python_project(self):
+        """回归：普通 Python 项目不应出现大量误报"""
+        wl = fake_wordlist()
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "seed_utils.py").write_text("import random\n\ndef seed_all(seed):\n    random.seed(seed)\n")
+            (d / "mnemonic_test.py").write_text("x = 1\n")
+            (d / "tables.py").write_text("SBOX = [" + ",".join(str((i * 7) % 256) for i in range(64)) + "]\nH = '" + "ab" * 32 + "'  # secret\n")
+            (d / "notes.md").write_text("The seed of this project is to explain how we pick a random value each time we run the tests "
+                                        "and why the results are the same every single run of the whole suite. " * 5)
+            (d / "venv").mkdir(); (d / "venv" / "pyvenv.cfg").write_text("home = /usr")
+            (d / "venv" / "x.txt").write_text("private key: " + os.urandom(32).hex())
+            for inc in (False, True):
+                res, _ = fc.scan_secrets(d, wl, include_code=inc)
+                self.assertEqual([r for r in res if r["level"] != "提示"], [], (inc, res))
+            self.assertEqual([r for r in fc.scan_secrets(d, wl)[0]], [])        # 连“提示”也不该有（.py 不按文件名报）
+
+    def test_code_files_skipped_unless_enabled_but_keys_found(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "deploy.py").write_text('PRIVATE_KEY = "0x' + os.urandom(32).hex() + '"\n')
+            self.assertEqual(fc.scan_secrets(d, None)[0], [])
+            res, _ = fc.scan_secrets(d, None, include_code=True)
+            self.assertEqual([r["kind"] for r in res], ["疑似私钥(64位十六进制)"])
+
+    def test_solana_array_needs_context(self):
+        arr = "[" + ",".join(str(i * 3 % 256) for i in range(64)) + "]"
+        self.assertEqual(fc.scan_text("table = " + arr + "\n", None), [])
+        self.assertTrue(fc.scan_text("secretKey: " + arr, None))
+        self.assertTrue(fc.scan_text(arr, None))
+
+    def test_known_test_mnemonic_is_only_a_hint(self):
+        wl = fake_wordlist()
+        m = " ".join(fc.entropy_to_mnemonic(bytes(16), wl[0]))           # 全零熵 → 类似 “abandon×11 about”
+        hits = fc.scan_text("mnemonic: " + m, wl)
+        self.assertEqual([(k, lv) for k, lv, _, _ in hits], [("已知测试助记词", "提示")])
+        self.assertTrue(fc.is_known_test("test test test test test test test test test test test junk".split()))
+        self.assertFalse(fc.is_known_test("alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima".split()))
+
+    def test_wordlist_info_when_missing(self):
+        fc._WL_CACHE.update(tried=True, val=None, path=None)
+        info = fc.wordlist_info()
+        self.assertFalse(info["loaded"])
+        self.assertTrue(info["searched"])
+        fc._WL_CACHE.update(tried=False)
 
     def test_wallet_paths(self):
         yes = ["C:\\Users\\a\\AppData\\Roaming\\Bitcoin\\wallet.dat", "/home/a/.bitcoin/wallets/w1/wallet.dat",
@@ -167,6 +213,30 @@ class T(unittest.TestCase):
                 self.assertEqual(e[0]["name"], "Bitcoin Core")
                 self.assertEqual(e[0]["resync"][0], ("blocks", 5000))
                 self.assertTrue(any(s == "wallet.dat" for s, _ in e[0]["wallet"]))
+
+
+class ReadmeRules(unittest.TestCase):
+    """维护约定：README.md 和 README.en.md 的最后一个二级标题都必须是 “## FAQ”（macOS Gatekeeper 放行说明）。
+    新增章节请插在 FAQ 之前。"""
+
+    def _check(self, name, must):
+        readme = (Path(__file__).resolve().parent.parent / name).read_text(encoding="utf-8")
+        headings = [l for l in readme.splitlines() if l.startswith("## ")]
+        self.assertEqual(headings[-1].strip(), "## FAQ", name)
+        faq = readme.split("## FAQ", 1)[1]
+        self.assertIn("xattr -cr /Applications/Faster.app", faq)
+        self.assertIn(must, faq)
+
+    def test_faq_is_last_section_zh(self):
+        self._check("README.md", "仍要打开")
+
+    def test_faq_is_last_section_en(self):
+        self._check("README.en.md", "Open Anyway")
+
+    def test_readmes_link_each_other(self):
+        root = Path(__file__).resolve().parent.parent
+        self.assertIn("README.en.md", (root / "README.md").read_text(encoding="utf-8"))
+        self.assertIn("README.md", (root / "README.en.md").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

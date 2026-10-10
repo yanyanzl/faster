@@ -1,20 +1,22 @@
-# Faster v0.2.0 · 打包说明
+# Faster v0.2.2 · 使用与打包说明
+
+**中文** | [English](README.en.md)
 
 成品：
-- Windows：`Faster-0.2.0.exe`（单文件，双击运行）
-- macOS：`Faster-0.2.0.dmg`（打开后把 Faster 拖进“应用程序”）
+- Windows：`Faster-0.2.2.exe`（单文件，双击运行）
+- macOS：`Faster-0.2.2.dmg`（打开后把 Faster 拖进“应用程序”）
 
 PyInstaller 不能跨系统打包——**Windows 版必须在 Windows 上打，Mac 版必须在 Mac 上打**。两种做法任选：
 
 ## 方法 A：GitHub 云端一键打包（推荐，不需要自己装环境）
 1. 在 GitHub 新建一个仓库，把本文件夹的**全部内容**（含隐藏的 `.github` 目录）上传。
 2. 打开仓库的 **Actions → Build Faster → Run workflow**。
-3. 约 3~5 分钟后，在运行记录底部的 **Artifacts** 下载 `Faster-windows` 和 `Faster-macos`。
+3. 约 3~5 分钟后，在运行记录底部的 **Artifacts** 下载 `Faster-<版本号>-windows` 和 `Faster-<版本号>-macos`。
    （想发布成 Release：打个 tag，如 `git tag v1.0.0 && git push --tags`，会自动生成下载页。）
 
 ## 方法 B：在自己电脑上打包
-- **Windows**：安装 Python 3.9+（勾选 Add to PATH）→ 双击 `build_windows.bat` → `dist\Faster.exe`
-- **macOS**：终端运行 `bash build_mac.sh` → `dist/Faster.dmg`。脚本会自动建虚拟环境（不会遇到 externally-managed-environment 报错）。
+- **Windows**：安装 Python 3.9+（勾选 Add to PATH）→ 双击 `build_windows.bat` → `dist\Faster-<版本号>.exe`
+- **macOS**：终端运行 `bash build_mac.sh` → `dist/Faster-<版本号>.dmg`。脚本会自动建虚拟环境（不会遇到 externally-managed-environment 报错）。
   若提示缺少 tkinter：Homebrew 用户执行 `brew install python-tk`，或安装 python.org 的官方 Python。
 
 ## 首次运行的系统提示（未购买代码签名证书时都会出现，属正常）
@@ -29,14 +31,14 @@ PyInstaller 不能跨系统打包——**Windows 版必须在 Windows 上打，M
 - macOS 若要自动清理“文稿/下载”等文件夹，需在 系统设置 → 隐私与安全性 → 完全磁盘访问权限 中添加 Faster。
 - 无界面执行一次清理：`Faster.exe --auto-clean`（加 `--dry-run` 为试运行）。
 
-## 版本管理（v0.2.0 作为基础版本）
+## 版本管理（v0.1.0 是基础版本）
 - 版本号只改 `faster.py` 顶部的 `__version__`；界面标题、`--version`、dmg/exe 文件名、Mac 的应用信息都会自动跟随。
-- 把当前代码固化为基线（建议）：
+- 发布新版本：提交代码后打 tag，GitHub 会自动打包并发布（例如当前版本）：
   ```
-  git init && git add . && git commit -m "v0.2.0 baseline"
-  git tag v0.2.0
+  git add . && git commit -m "v0.2.2"
+  git tag v0.2.2 && git push origin main v0.2.2
   ```
-  之后每个新功能走分支/提交，并在 `CHANGELOG.md` 记一笔；推送 `v0.2.0` 之类的 tag 会让 GitHub 自动打包并发布。
+- 每个版本的改动记录在 `CHANGELOG.md`。
 
 ## 管理员权限怎么用
 程序平时以普通用户运行（更安全），**只在需要时**单独提权，界面上带 🛡 的按钮或弹窗会引导你：
@@ -57,16 +59,35 @@ PyInstaller 不能跨系统打包——**Windows 版必须在 Windows 上打，M
 |---|---|---|
 | 钱包文件 | 找出本机钱包文件并标注云同步风险 | 这些文件会被所有清理功能自动跳过 |
 | 区块链数据 | 识别节点/钱包数据目录和可重新同步的大小 | 只提示，不自动删除 |
-| 密钥泄露扫描 | 找明文保存的助记词/私钥 | 不回显内容；图片/截图、便签数据库、PDF 不在范围内 |
+| 密钥泄露扫描 | 找明文保存的助记词/私钥 | 不回显内容；默认不读代码/配置文件（可勾选）；图片/截图、便签数据库、PDF 不在范围内 |
 | 挖矿检测 | 找挖矿木马 | 你自己运行的矿工也会被标出（高危后面有说明） |
 | 剪贴板守护 | 发现地址被替换；校验收款地址 | 需手动开启，只在内存里记录 |
 
 **BIP39 词表**：助记词的“校验和验证”需要官方英文词表。打包版会在打包时自动下载并内置（`fetch_wordlist.py`，下载后做结构 + 官方测试向量双重校验，不通过就不用）。
-从源码运行时，在“密钥泄露扫描”页点“获取 BIP39 词表”即可；没有词表时会退化为“关键词 + 单词数”的启发式检测（结果为中危、未校验）。
+从源码运行时，扫描前会询问是否下载（也可在“密钥泄露扫描”页点“查看助记词表”下载）。**没有词表时不检测助记词**（不再靠关键词猜测），只检测私钥。
 
 **运行测试**：`python -m unittest discover -s tests -v`
 
 **重要提醒**：Faster 永远不会向你索要助记词/私钥。扫描发现明文助记词/私钥时，最稳妥的做法是：把资产转到全新生成的钱包，新助记词抄写在纸上离线保存，再删除或加密旧的明文文件。固态硬盘上的“删除”不保证数据无法恢复。
+
+## 界面语言（中文 / English）
+- 默认跟随系统语言。切换方式任选其一：
+  - 图形界面：“概览”页顶部的 **语言 / Language** 下拉框（跟随系统 / 简体中文 / English），选择后按提示重启即可；
+  - 命令行菜单：选 `9`；
+  - 命令行参数：`--lang en` 或 `--lang zh`（仅本次运行）；环境变量 `FASTER_LANG=en`；
+  - 设置文件：`~/.faster/settings.json` 里的 `"language"`（`zh` / `en` / `auto`）。
+- 定时自动清理、管理员辅助进程使用同一语言设置，日志和报告也用当前语言书写。
+- 打包脚本（`build_*.bat/.sh`、`fetch_wordlist.py`）的控制台输出目前仅有中文。
+- **想增加一种新语言**：复制 `faster_i18n_en.py` 为 `faster_i18n_xx.py`，把译文填进 `CATALOG`（键是中文原文，`{0}` `{1}` 占位符必须保留）；在 `faster_i18n.py` 的 `LANGUAGES` 和 `_CATALOGS` 各加一行；运行 `python tools/i18n_check.py` 检查缺漏。
+- **开发约定**：面向用户的文字一律写成 `tr("中文原文 {0}", 参数)`，不要直接写中文字符串（正则表达式除外）；`tests/test_i18n.py` 会检查。
+
+## BIP39 词表说明
+- 来源：<https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt>（官方英文词表，2048 个单词）。程序下载的是同一文件的原始版本，并做双重校验：结构（2048 个互不相同、按字母排序、前 4 个字母可唯一区分）+ BIP39 官方测试向量；不通过就不使用。
+- **词表是固定不变的**：改动任何一个单词都会让已有钱包的助记词失效，所以英文词表自 2013 年以来没有变化；将来只可能新增语言，不会修改已有词表。
+- **有多种语言**：官方仓库还有日语、韩语、西班牙语、简体中文、繁体中文、法语、意大利语、捷克语、葡萄牙语共 9 种。现实中绝大多数钱包使用英文；Faster 目前只检测英文词表。
+- 另外几种“助记词”不是 BIP39，也未覆盖：Electrum 自有的种子格式、Trezor 的 SLIP39（分片备份，1024 词表）、Monero 的 25 词助记词。
+- **内置到程序**：打包时由 `fetch_wordlist.py` 下载、校验并打进程序。想让打包完全不依赖网络：在有网的电脑上运行一次 `python fetch_wordlist.py`，把生成的 `bip39_english.txt` 提交进仓库即可。
+- 在“钱包安全 → 密钥泄露扫描 → 查看助记词表”里可以查看全部单词、来源、文件路径和 SHA-256。
 
 ## FAQ
   ```
