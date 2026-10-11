@@ -1,10 +1,10 @@
-# Faster v0.2.2 · 使用与打包说明
+# Faster v0.2.3 · 使用与打包说明
 
 **中文** | [English](README.en.md)
 
 成品：
-- Windows：`Faster-0.2.2.exe`（单文件，双击运行）
-- macOS：`Faster-0.2.2.dmg`（打开后把 Faster 拖进“应用程序”）
+- Windows：`Faster-0.2.3.exe`（单文件，双击运行）
+- macOS：`Faster-0.2.3.dmg`（打开后把 Faster 拖进“应用程序”）
 
 PyInstaller 不能跨系统打包——**Windows 版必须在 Windows 上打，Mac 版必须在 Mac 上打**。两种做法任选：
 
@@ -35,8 +35,8 @@ PyInstaller 不能跨系统打包——**Windows 版必须在 Windows 上打，M
 - 版本号只改 `faster.py` 顶部的 `__version__`；界面标题、`--version`、dmg/exe 文件名、Mac 的应用信息都会自动跟随。
 - 发布新版本：提交代码后打 tag，GitHub 会自动打包并发布（例如当前版本）：
   ```
-  git add . && git commit -m "v0.2.2"
-  git tag v0.2.2 && git push origin main v0.2.2
+  git add . && git commit -m "v0.2.3"
+  git tag v0.2.3 && git push origin main v0.2.3
   ```
 - 每个版本的改动记录在 `CHANGELOG.md`。
 

@@ -18,6 +18,12 @@ from pathlib import Path
 
 from faster_i18n_en import CATALOG as _EN
 
+for _stream in (sys.stdout, sys.stderr):      # 例如英文版 Windows 控制台(cp1252)打印中文时，不要抛 UnicodeEncodeError
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 LANGUAGES = {"zh": "简体中文", "en": "English"}        # 语言代码 -> 该语言自己的名字（不翻译）
 _CATALOGS = {"en": _EN}                                # zh 是源语言，不需要目录
 SETTINGS = Path.home() / ".faster" / "settings.json"

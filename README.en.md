@@ -1,12 +1,12 @@
-# Faster v0.2.2 · Usage & build guide
+# Faster v0.2.3 · Usage & build guide
 
 [中文](README.md) | **English**
 
 Faster is a cross-platform (Windows / macOS / Linux) PC cleaner and wallet-safety helper: it frees disk space, speeds up your computer, scans for risks, and protects crypto wallets. It has a GUI, a CLI, and scheduled auto-cleaning.
 
 Deliverables:
-- Windows: `Faster-0.2.2.exe` (single file, double-click to run)
-- macOS: `Faster-0.2.2.dmg` (open it and drag Faster into “Applications”)
+- Windows: `Faster-0.2.3.exe` (single file, double-click to run)
+- macOS: `Faster-0.2.3.dmg` (open it and drag Faster into “Applications”)
 
 PyInstaller cannot cross-compile — **build the Windows version on Windows and the Mac version on a Mac**. Pick either way:
 
@@ -37,8 +37,8 @@ PyInstaller cannot cross-compile — **build the Windows version on Windows and 
 - Change the version only in `__version__` at the top of `faster.py`; the window title, `--version`, the dmg/exe file names and the Mac app info follow automatically.
 - To release a new version, commit and push a tag; GitHub then builds and publishes automatically (for the current version):
   ```
-  git add . && git commit -m "v0.2.2"
-  git tag v0.2.2 && git push origin main v0.2.2
+  git add . && git commit -m "v0.2.3"
+  git tag v0.2.3 && git push origin main v0.2.3
   ```
 - Changes for every version are recorded in `CHANGELOG.md`.
 

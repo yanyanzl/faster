@@ -2,6 +2,12 @@
 
 版本号规则：`主版本.次版本.修订`，唯一来源是 `faster.py` 顶部的 `__version__`。
 
+## v0.2.3 —— 修复 Windows 上的编码问题
+- 修复在 Windows（默认 cp1252 编码）上运行测试时，打印中文会触发 `UnicodeEncodeError`，导致 CI 失败：测试里的子进程统一使用 UTF-8。
+- 程序本身也加固：控制台编码无法显示某些字符时，改为显示 `?`，不再抛异常（例如英文版 Windows 控制台里用中文界面运行）。
+- 测试里不再写死版本号。
+- Fixed: Windows console encoding errors in tests/CLI.
+
 ## v0.2.2 —— 多语言（中文 / English）+ 英文 README
 - **语言选择**：概览页顶部“语言 / Language”下拉框（跟随系统 / 简体中文 / English），切换后可立即重启；命令行菜单 `9`、`--lang en|zh`、环境变量 `FASTER_LANG`、设置文件 `~/.faster/settings.json` 同样可用。默认跟随系统语言。
 - 全部界面、命令行、日志、扫描结果、定时清理与管理员辅助进程均已翻译（528 条文案）；管理员辅助进程沿用同一语言。

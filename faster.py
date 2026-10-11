@@ -18,7 +18,7 @@ Faster Faster  (Windows / macOS / Linux)
 
 依赖：Python 3.8+。可选：pip install psutil send2trash
 """
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 import os
 import sys

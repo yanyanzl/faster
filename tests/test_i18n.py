@@ -9,18 +9,23 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+import re as _re
+VERSION = _re.search(r'__version__\s*=\s*"([^"]+)"', (ROOT / "faster.py").read_text(encoding="utf-8")).group(1)
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 
 
 def run_py(code, lang=None, home=None, argv=()):
     env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"          # Windows 默认 cp1252，打印中文会报 UnicodeEncodeError
+    env["PYTHONUTF8"] = "1"
     env.pop("FASTER_LANG", None)
     if lang:
         env["FASTER_LANG"] = lang
     if home:
         env["HOME"] = env["USERPROFILE"] = home
-    r = subprocess.run([sys.executable, "-c", code, *argv], capture_output=True, text=True, cwd=str(ROOT), env=env, timeout=60)
+    r = subprocess.run([sys.executable, "-c", code, *argv], capture_output=True, encoding="utf-8", errors="replace",
+                       cwd=str(ROOT), env=env, timeout=60)
     assert r.returncode == 0, r.stderr
     return r.stdout.strip()
 
@@ -88,7 +93,7 @@ class I18n(unittest.TestCase):
             out = run_py("import sys; sys.argv=['x','--auto-clean','--dry-run']; import faster_gui as g; g.main()", "en", h)
             self.assertIn("Auto-clean started", out)
             self.assertIn("Total reclaimable", out)
-            self.assertIn("Faster 0.2.2", run_py("import sys; sys.argv=['x','--version']; import faster_gui as g; g.main()", "en", h))
+            self.assertIn("Faster " + VERSION, run_py("import sys; sys.argv=['x','--version']; import faster_gui as g; g.main()", "en", h))
 
     def test_english_ui_has_no_chinese_for_translated_strings(self):
         """英文界面下，目录里的译文不应夹带中文（identity 项和系统输出匹配除外）"""
