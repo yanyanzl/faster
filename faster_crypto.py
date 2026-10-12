@@ -46,9 +46,11 @@ def _norm(path):
     return str(path).replace("\\", "/").lower()
 
 
-def dir_size(path):
+def dir_size(path, task=None):
     total = 0
     for r, _, files in os.walk(path, onerror=lambda e: None):
+        if task is not None and not task.tick(r):
+            break
         for f in files:
             try:
                 fp = os.path.join(r, f)
@@ -141,12 +143,12 @@ _NOISE_DIRS = {"node_modules", ".git", "site-packages", "__pycache__", "$recycle
                ".faster", ".pc_optimizer"}
 
 
-def find_wallet_files(root=None, limit=500, max_seconds=600):
+def find_wallet_files(root=None, limit=500, max_seconds=600, task=None):
     """扫描钱包文件/目录。目录型（钱包扩展、keystore 等）合并成一条"""
     root = Path(root or HOME)
     deadline, res = time.time() + max_seconds, []
     for r, dirs, files in os.walk(root, onerror=lambda e: None):
-        if time.time() > deadline or len(res) >= limit:
+        if time.time() > deadline or len(res) >= limit or (task is not None and not task.tick(r)):
             break
         if is_wallet_path(r):
             res.append(dict(path=r, kind=wallet_kind(r), size=dir_size(r), mtime=_mtime(r), cloud=cloud_hint(r), is_dir=True))
@@ -506,7 +508,7 @@ def _read_text(fp, ext, size):
         return None
 
 
-def scan_secrets(root, wl="auto", max_seconds=900, include_code=False):
+def scan_secrets(root, wl="auto", max_seconds=900, include_code=False, task=None):
     """扫描 root 下的文本/Office 文件。返回 (findings, 已扫描文件数)
     findings: dict(path, kind, level, detail, line, cloud)
     include_code=False（默认）不读 .py/.js/.sh/.html/.yml 等代码与配置文件，避免对源码误报。"""
@@ -515,7 +517,7 @@ def scan_secrets(root, wl="auto", max_seconds=900, include_code=False):
     root, deadline = Path(root), time.time() + max_seconds
     res, scanned = [], 0
     for r, dirs, files in os.walk(root, onerror=lambda e: None):
-        if time.time() > deadline:
+        if time.time() > deadline or (task is not None and not task.tick(r)):
             break
         if "pyvenv.cfg" in files:                       # Python 虚拟环境：整棵跳过
             dirs[:] = []
@@ -676,7 +678,7 @@ class ClipboardGuard:
 
 
 # ============================================================ 5. 区块链数据目录识别
-def known_chain_dirs():
+def known_chain_dirs(task=None):
     """扫描常见区块链软件的数据目录；返回 [dict(name,path,total,resync,wallet,note)]"""
     H = HOME
     appdata = Path(os.environ.get("APPDATA", H / "AppData/Roaming"))
@@ -702,12 +704,14 @@ def known_chain_dirs():
     ]
     out = []
     for name, path, resync, wallet, note in specs:
+        if task is not None and not task.tick(name):
+            break
         if not path or not Path(path).is_dir():
             continue
         path = Path(path)
-        rs = [(s, dir_size(path / s)) for s in resync if (path / s).exists()]
-        ws = [(s, dir_size(path / s) if (path / s).is_dir() else _size(path / s)) for s in wallet if (path / s).exists()]
-        out.append(dict(name=name, path=str(path), total=dir_size(path), resync=rs, wallet=ws, note=note))
+        rs = [(s, dir_size(path / s, task)) for s in resync if (path / s).exists()]
+        ws = [(s, dir_size(path / s, task) if (path / s).is_dir() else _size(path / s)) for s in wallet if (path / s).exists()]
+        out.append(dict(name=name, path=str(path), total=dir_size(path, task), resync=rs, wallet=ws, note=note))
     out.sort(key=lambda e: -e["total"])
     return out
 

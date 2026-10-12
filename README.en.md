@@ -1,12 +1,12 @@
-# Faster v0.2.3 · Usage & build guide
+# Faster v0.3.0 · Usage & build guide
 
 [中文](README.md) | **English**
 
 Faster is a cross-platform (Windows / macOS / Linux) PC cleaner and wallet-safety helper: it frees disk space, speeds up your computer, scans for risks, and protects crypto wallets. It has a GUI, a CLI, and scheduled auto-cleaning.
 
 Deliverables:
-- Windows: `Faster-0.2.3.exe` (single file, double-click to run)
-- macOS: `Faster-0.2.3.dmg` (open it and drag Faster into “Applications”)
+- Windows: `Faster-0.3.0.exe` (single file, double-click to run)
+- macOS: `Faster-0.3.0.dmg` (open it and drag Faster into “Applications”)
 
 PyInstaller cannot cross-compile — **build the Windows version on Windows and the Mac version on a Mac**. Pick either way:
 
@@ -37,8 +37,8 @@ PyInstaller cannot cross-compile — **build the Windows version on Windows and 
 - Change the version only in `__version__` at the top of `faster.py`; the window title, `--version`, the dmg/exe file names and the Mac app info follow automatically.
 - To release a new version, commit and push a tag; GitHub then builds and publishes automatically (for the current version):
   ```
-  git add . && git commit -m "v0.2.3"
-  git tag v0.2.3 && git push origin main v0.2.3
+  git add . && git commit -m "v0.3.0"
+  git tag v0.3.0 && git push origin main v0.3.0
   ```
 - Changes for every version are recorded in `CHANGELOG.md`.
 
@@ -71,6 +71,25 @@ When running from source, you are asked before scanning whether to download it (
 **Run the tests**: `python -m unittest discover -s tests -v`
 
 **Important**: Faster will never ask you for a mnemonic or private key. If a scan finds a plaintext mnemonic/private key, the safest course is to move your assets to a freshly generated wallet, write the new mnemonic on paper and keep it offline, then delete or encrypt the old plaintext files. “Delete” on an SSD does not guarantee the data cannot be recovered.
+
+## v0.3 Performance diagnostics & Restore center
+**“Diagnostics” tab** (read-only measurements; it never changes the system):
+| Sub-tab | What it does |
+|---|---|
+| Bottlenecks | Checks free disk space, memory, swap, CPU, number of startup items, uptime, reclaimable junk and the Windows power plan, then gives a **health score** (starts at 100; −25 per “Critical”, −10 per “Warning”) with targeted advice. Select a row and click “Go fix it” (or double-click) to jump to the matching tab. |
+| Startup impact | Rates every startup item by resource use, highest first, and lets you disable them right there. **It is an estimate** based on the *running* process (memory: 1 point per 20 MB, capped at 50; average CPU: 5 points per 1%, capped at 50; ≥60 = “High”, ≥25 = “Medium”). It is not an exact boot time, and items that are not currently running cannot be assessed. |
+| Before/after | Every time you clean junk, disable startup items or end processes, a “before” and an “after” snapshot (free disk, memory used, startup items, process count…) are recorded automatically and the change is shown when it finishes. You can also record manually and compare any two entries. |
+
+**Cancel & progress**: for long operations (junk scan, large files, duplicates, wallet files, blockchain data, key leak scan, diagnostics) the status bar shows the current progress and a “Cancel” button; after cancelling, the partial results scanned so far are kept.
+
+**Restore center** (one place to see and undo what Faster moved away or disabled):
+- **Files in the tool's trash**: restored to their original location; if a file with the same name already exists there, a “(restored)” suffix is added — **nothing is ever overwritten**. You can also delete them permanently or empty the trash.
+- **Files in the system trash**: only a record is kept (90 days); click “Open system trash” to restore them yourself.
+- **Disabled startup items**: can be restored (system-level ones ask for authorization).
+- Caches deleted by “Junk cleanup” are **deleted permanently** and not listed here; wallet files are never moved.
+- Note: moving a file to the trash **does not free disk space immediately** — space is only freed after you empty the trash.
+
+CLI menu `10`: performance diagnosis (read-only).
 
 ## Interface language (中文 / English)
 - By default it follows the system language. Switch in any of these ways:

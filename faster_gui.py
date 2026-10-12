@@ -42,6 +42,8 @@ if "--elevated" in sys.argv and "--home" in sys.argv:
     os.environ["USERPROFILE"] = _h
 import faster as core  # noqa: E402
 import faster_crypto as fc  # noqa: E402
+import faster_diag as fd  # noqa: E402
+from faster_task import Task  # noqa: E402
 import faster_i18n as i18n  # noqa: E402
 from faster_i18n import tr  # noqa: E402
 from faster import human, HOME, APP_DIR, TRASH_DIR, IS_WIN, IS_MAC, IS_LINUX, __version__  # noqa: E402
@@ -212,6 +214,8 @@ def auto_clean(dry_run=False):
     if pd > 0 and TRASH_DIR.is_dir():
         cutoff, sz_total = time.time() - pd * 86400, 0
         for child in TRASH_DIR.iterdir():
+            if child.name == core.LEDGER.name:
+                continue
             try:
                 ts = int(child.name.split("_", 1)[0])
             except ValueError:
@@ -224,6 +228,8 @@ def auto_clean(dry_run=False):
         if sz_total:
             lines.append(tr("  工具回收站中超过 {0} 天的文件：{1}", pd, human(sz_total)))
             freed += sz_total
+            if not dry_run:
+                core.ledger_prune()
 
     # 4) 自定义文件夹规则：超过 N 天未修改的文件 → 移入回收站（可找回）
     for rule in cfg["folders"]:
@@ -418,16 +424,21 @@ def schedule_installed():
 
 
 # ======================================================== 业务函数（后台线程）
-def find_duplicates(root, min_mb=1):
+def find_duplicates(root, min_mb=1, task=None):
+    alive = (lambda p=None: True) if task is None else task.tick
     by_size = defaultdict(list)
-    for fp, sz, mt in core.walk_user_files(root, int(min_mb * 1048576)):
+    for fp, sz, mt in core.walk_user_files(root, int(min_mb * 1048576), task):
         by_size[sz].append((fp, mt))
     groups = []
     for sz, lst in by_size.items():
         if len(lst) < 2:
             continue
+        if not alive():
+            break
         quick = defaultdict(list)
         for fp, mt in lst:
+            if not alive(fp):
+                break
             h = core.sha256(fp, 65536)
             if h:
                 quick[h].append((fp, mt))
@@ -436,6 +447,8 @@ def find_duplicates(root, min_mb=1):
                 continue
             full = defaultdict(list)
             for fp, mt in q:
+                if not alive(fp):
+                    break
                 h = core.sha256(fp)
                 if h:
                     full[h].append((fp, mt))
@@ -693,6 +706,48 @@ def restart_app():
         return False
 
 
+def effect_begin():
+    """优化动作开始前拍一张快照（几毫秒）"""
+    return fd.take_snapshot()
+
+
+def effect_end(before, label):
+    """优化后再拍一张，把“前/后”两条记录存进历史，返回一句话效果（没有明显变化则为空字符串）"""
+    after = fd.take_snapshot()
+    before["label"], after["label"] = tr("{0}（前）", label), tr("{0}（后）", label)
+    fd.save_snapshot(before)
+    fd.save_snapshot(after)
+    return fd.effect_summary(before, after)
+
+
+def with_effect(msg, eff):
+    return msg + (("\n" + tr("效果：{0}", eff)) if eff else "")
+
+
+def open_folder(path):
+    try:
+        if IS_WIN:
+            os.startfile(str(path))
+        elif IS_MAC:
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+    except Exception:
+        pass
+
+
+def open_system_trash():
+    try:
+        if IS_WIN:
+            subprocess.Popen(["explorer", "shell:RecycleBinFolder"])
+        elif IS_MAC:
+            subprocess.Popen(["open", str(HOME / ".Trash")])
+        else:
+            subprocess.Popen(["xdg-open", "trash:///"])
+    except Exception:
+        pass
+
+
 def relaunch_as_admin():
     """Windows：以管理员身份重新启动整个程序（一次授权，全部功能可用）"""
     if not IS_WIN:
@@ -758,6 +813,11 @@ if tk:
 
         def select_all(self):
             self.tree.selection_set(self.tree.get_children())
+
+        def done_note(self, task):
+            """扫描被用户取消时，在底部提示“只是部分结果”"""
+            if task is not None and task.cancelled:
+                self.info.config(text=tr("已取消，下面只是已扫描到的 {0} 项部分结果。", len(self.data)))
 
         def need_selection(self):
             sel = self.selected()
@@ -868,13 +928,17 @@ if tk:
             ttk.Label(self.top, text=tr("清理浏览器缓存后网页首次加载会稍慢，不会丢失密码/书签")).pack(side="left", padx=10)
 
         def scan(self):
+            task = Task()
+
             def work():
                 res = []
                 for name, p in core.junk_targets():
-                    files = core.list_files_in(p)
+                    files = core.list_files_in(p, 1, task)
                     size = sum(s for _, s in files)
                     if size > 0:
                         res.append((name, p, files, size))
+                    if task.cancelled:
+                        break
                 return sorted(res, key=lambda x: -x[3])
 
             def done(res):
@@ -882,13 +946,16 @@ if tk:
                 for r in res:
                     self.add((r[0], human(r[3]), len(r[2]), str(r[1])), r)
                 self.info.config(text=tr("可释放合计 {0}", human(sum(r[3] for r in res))) if res else tr("没有发现可清理的垃圾"))
+                self.done_note(task)
 
-            self.app.run_bg(work, done, tr("扫描垃圾文件…"))
+            self.app.run_bg(work, done, tr("扫描垃圾文件…"), task=task)
 
         def clean(self):
             sel = self.need_selection()
             if not sel or not messagebox.askyesno(tr("确认"), tr("确认清理选中的 {0} 项？", len(sel))):
                 return
+
+            before = effect_begin()
 
             def work():
                 freed = 0
@@ -902,7 +969,7 @@ if tk:
                 return freed
 
             def done(freed):
-                messagebox.showinfo(tr("完成"), tr("已释放约 {0}", human(freed)))
+                messagebox.showinfo(tr("完成"), with_effect(tr("已释放约 {0}", human(freed)), effect_end(before, tr("清理垃圾"))))
                 self.scan()
 
             self.app.run_bg(work, done, tr("清理中…"))
@@ -949,8 +1016,10 @@ if tk:
             except ValueError:
                 mb, n = 100, 50
 
+            task = Task()
+
             def work():
-                return heapq.nlargest(n, core.walk_user_files(root, int(mb * 1048576)), key=lambda x: x[1])
+                return heapq.nlargest(n, core.walk_user_files(root, int(mb * 1048576), task), key=lambda x: x[1])
 
             def done(res):
                 self.clear()
@@ -958,8 +1027,9 @@ if tk:
                 for fp, sz, mt in res:
                     self.add((human(sz), tr("{0} 天前", int((now - mt) / 86400)), fp), (fp, sz))
                 self.info.config(text=tr("共 {0} 个文件，合计 {1}", len(res), human(sum(r[1] for r in res))))
+                self.done_note(task)
 
-            self.app.run_bg(work, done, tr("扫描大文件…（目录较大时可能需要几分钟）"))
+            self.app.run_bg(work, done, tr("扫描大文件…（目录较大时可能需要几分钟）"), task=task)
 
         def delete(self):
             sel = self.need_selection()
@@ -980,7 +1050,7 @@ if tk:
                 for iid, _ in ok:
                     self.tree.delete(iid)
                     self.data.pop(iid, None)
-                messagebox.showinfo(tr("完成"), tr("已处理 {0} 个文件，释放约 {1}", len(ok), human(sum(s for _, s in ok))))
+                messagebox.showinfo(tr("完成"), tr("已处理 {0} 个文件（{1}）。文件现在在回收站里，清空回收站后才会真正释放磁盘空间；也可以到“还原中心”还原。", len(ok), human(sum(s for _, s in ok))))
 
             self.app.run_bg(work, done, tr("处理中…"))
 
@@ -1010,7 +1080,9 @@ if tk:
                         waste += sz
                 self.info.config(text=tr("{0} 组重复文件，删除全部副本可释放 {1}", len(groups), human(waste)) if groups else tr("没有发现重复文件"))
 
-            self.app.run_bg(lambda: find_duplicates(root), done, tr("查找重复文件…（会计算文件哈希，较慢）"))
+            task = Task()
+            self.app.run_bg(lambda: find_duplicates(root, 1, task), lambda g: (done(g), self.done_note(task)),
+                            tr("查找重复文件…（会计算文件哈希，较慢）"), task=task)
 
         def select_copies(self):
             self.tree.selection_set([i for i, o in self.data.items() if not o["keep"]])
@@ -1030,7 +1102,7 @@ if tk:
                 for iid, _ in ok:
                     self.tree.delete(iid)
                     self.data.pop(iid, None)
-                messagebox.showinfo(tr("完成"), tr("已处理 {0} 个文件，释放约 {1}", len(ok), human(sum(s for _, s in ok))))
+                messagebox.showinfo(tr("完成"), tr("已处理 {0} 个文件（{1}）。文件现在在回收站里，清空回收站后才会真正释放磁盘空间；也可以到“还原中心”还原。", len(ok), human(sum(s for _, s in ok))))
 
             self.app.run_bg(work, done, tr("处理中…"))
 
@@ -1055,9 +1127,17 @@ if tk:
 
         def disable(self):
             sel = self.need_selection()
-            if not sel or not messagebox.askyesno(tr("确认"), tr("停用 {0} 个启动项？（会自动备份，可恢复）", len(sel))):
+            if sel:
+                self.disable_items([o for _, o in sel])
+
+        def disable_items(self, items):
+            if not messagebox.askyesno(tr("确认"), tr("停用 {0} 个启动项？（会自动备份，可恢复）", len(items))):
                 return
-            failed = [o for _, o in sel if not core.disable_startup(o)]
+            before = effect_begin()
+            failed = [o for o in items if not core.disable_startup(o)]
+            eff = effect_end(before, tr("停用启动项"))
+            if eff and not failed:
+                messagebox.showinfo(tr("完成"), tr("效果：{0}", eff))
             need = [o for o in failed if is_system_startup(o)]
             other = [o["name"] for o in failed if not is_system_startup(o)]
             if other:
@@ -1130,6 +1210,7 @@ if tk:
             if not sel or not messagebox.askyesno(tr("确认"), tr("结束 {0} 个进程？未保存的数据会丢失。", len(sel))):
                 return
             fails = []
+            before = effect_begin()
             for _, (pid, name) in sel:
                 try:
                     p = psutil.Process(pid)
@@ -1139,8 +1220,11 @@ if tk:
                     fails.append(tr("{0}：未响应，未强制结束", name))
                 except Exception as e:
                     fails.append(tr("{0}：{1}", name, e))
+            eff = effect_end(before, tr("结束进程"))
             if fails:
                 messagebox.showwarning(tr("部分未结束"), "\n".join(fails))
+            elif eff:
+                messagebox.showinfo(tr("完成"), tr("效果：{0}", eff))
             self.load()
 
     # ------------------------------------------------------------ 卸载
@@ -1257,7 +1341,9 @@ if tk:
                     msg += tr("  ⚠ 其中 {0} 个位于云同步目录（红色），云端可能有副本，建议迁出并确认已离线备份助记词。", cloud)
                 self.info.config(text=msg if res else tr("没有发现钱包文件。"))
 
-            self.app.run_bg(lambda: fc.find_wallet_files(HOME), done, tr("查找钱包文件…（会遍历主目录，可能需要几分钟）"))
+            task = Task()
+            self.app.run_bg(lambda: fc.find_wallet_files(HOME, task=task), lambda r: (done(r), self.done_note(task)),
+                            tr("查找钱包文件…（会遍历主目录，可能需要几分钟）"), task=task)
 
         def reveal(self):
             sel = self.need_selection()
@@ -1283,7 +1369,9 @@ if tk:
                 self.info.config(text=tr("发现 {0} 个区块链软件数据目录；其中可重新同步的数据共 {1}。", len(res), human(free)) if res
                                  else tr("没有发现常见区块链软件的数据目录。"))
 
-            self.app.run_bg(lambda: fc.known_chain_dirs(), done, tr("识别区块链数据目录…"))
+            task = Task()
+            self.app.run_bg(lambda: fc.known_chain_dirs(task=task), lambda r: (done(r), self.done_note(task)),
+                            tr("识别区块链数据目录…"), task=task)
 
         def on_select(self, _e=None):
             sel = self.selected()
@@ -1406,14 +1494,15 @@ if tk:
             self.do_scan(root)
 
         def do_scan(self, root):
-            inc = self.code.get()
+            inc, task = self.code.get(), Task()
 
             def done(r):
                 self.results, self.scanned = r
                 self.render()
+                self.done_note(task)
 
-            self.app.run_bg(lambda: fc.scan_secrets(root, "auto", include_code=inc), done,
-                            tr("扫描助记词/私钥…（文件多时需要几分钟）"))
+            self.app.run_bg(lambda: fc.scan_secrets(root, "auto", include_code=inc, task=task), done,
+                            tr("扫描助记词/私钥…（文件多时需要几分钟）"), task=task)
 
         def render(self):
             self.clear()
@@ -1545,6 +1634,213 @@ if tk:
             for title, cls in ((tr("钱包文件"), WalletFilesTab), (tr("区块链数据"), ChainDirsTab), (tr("密钥泄露扫描"), SecretScanTab),
                                (tr("挖矿检测"), MinerTab), (tr("剪贴板守护"), ClipboardTab)):
                 nb.add(cls(app, nb), text=title)
+
+    # ------------------------------------------------------------ 性能诊断（v0.3）
+    class DiagTab(ListTab):
+        def __init__(self, app, parent):
+            super().__init__(app, [("lv", tr("级别"), 70, "center"), ("title", tr("项目"), 130, "w"),
+                                   ("detail", tr("现状"), 330, "w"), ("advice", tr("建议"), 420, "w")], parent)
+            self.btn(tr("开始诊断"), self.scan)
+            self.btn(tr("前往处理"), self.go)
+            self.score = ttk.Label(self.top, text="", font=("", 13, "bold"))
+            self.score.pack(side="left", padx=14)
+            self.tree.bind("<Double-1>", lambda e: self.go())
+            self.info.config(text=tr("只读测量，不会修改系统，约需 2~10 秒。诊断后选中一行点“前往处理”（或双击）可跳到对应页面。"))
+
+        def scan(self):
+            task = Task()
+
+            def done(r):
+                self.clear()
+                tag = {fd.LV_CRIT: "high", fd.LV_WARN: "mid", fd.LV_OK: "keep"}
+                for f in r["findings"]:
+                    self.add((f["level"], f["title"], f["detail"], f["advice"]), f, (tag[f["level"]],))
+                sc = r["score"]
+                self.score.config(text=tr("健康分：{0} / 100", sc),
+                                  foreground="#2e7d32" if sc >= 80 else "#e65100" if sc >= 55 else "#c62828")
+                fd.save_snapshot(r["snapshot"])
+                self.done_note(task)
+
+            self.app.run_bg(lambda: fd.run_diagnosis(task), done, tr("诊断中…"), task=task)
+
+        def go(self):
+            sel = self.need_selection()
+            if not sel:
+                return
+            f = sel[0][1]
+            goto = {"junk": lambda: self.app.goto("junk"), "process": lambda: self.app.goto("proc"),
+                    "impact": lambda: self.app.goto("diag", "impact")}.get(f["action"])
+            goto() if goto else messagebox.showinfo(tr("建议"), f["advice"])
+
+    class StartupImpactTab(ListTab):
+        def __init__(self, app, parent):
+            super().__init__(app, [("name", tr("名称"), 180, "w"), ("state", tr("状态"), 70, "center"), ("mem", tr("内存"), 80, "e"),
+                                   ("cpu", tr("平均 CPU"), 70, "e"), ("when", tr("启动时间点"), 110, "w"), ("lv", tr("影响"), 50, "center"),
+                                   ("advice", tr("建议"), 240, "w"), ("cmd", tr("命令 / 路径"), 300, "w")], parent)
+            self.btn(tr("评估启动影响"), self.scan)
+            self.btn(tr("全选"), self.select_all)
+            self.btn(tr("停用选中"), self.disable)
+            self.info.config(text=tr("按“正在运行的进程”估算（内存 + 平均 CPU），不是精确的开机耗时；当前没在运行的项目无法评估。"))
+
+        def scan(self):
+            def done(rows):
+                self.clear()
+                for r in rows:
+                    tag = ("high",) if r["level"] == tr("高") else ("mid",) if r["level"] == tr("中") else \
+                        ("keep",) if not r["running"] else ()
+                    self.add((r["name"], tr("运行中") if r["running"] else "-", human(r["rss"]) if r["running"] else "-",
+                              f"{r['cpu_pct']:.1f}%" if r["running"] else "-", r["when"], r["level"], r["advice"], r["cmd"]),
+                             r, tag)
+                n = sum(1 for r in rows if r["level"] == tr("高"))
+                self.info.config(text=tr("共 {0} 个启动项，其中 {1} 个影响较高。", len(rows), n))
+
+            self.app.run_bg(fd.startup_impact, done, tr("评估启动影响…"))
+
+        def disable(self):
+            sel = self.need_selection()
+            if sel:
+                self.app.tabs["startup"].disable_items([o["item"] for _, o in sel])
+                self.scan()
+
+    class CompareTab(ListTab):
+        def __init__(self, app, parent):
+            super().__init__(app, [("t", tr("时间"), 140, "w"), ("label", tr("说明"), 170, "w"), ("disk", tr("磁盘剩余"), 100, "e"),
+                                   ("mem", tr("内存占用率"), 90, "e"), ("st", tr("启动项"), 60, "e"), ("pr", tr("进程数"), 60, "e")], parent)
+            self.btn(tr("刷新"), self.load)
+            self.btn(tr("记录当前状态"), self.record)
+            self.btn(tr("对比选中的两条"), self.compare_sel)
+            self.btn(tr("清空历史"), self.clear_hist)
+            self.info.config(text=tr("清理、停用启动项、结束进程时会自动记录“前/后”两条；选中任意两条可以对比。"))
+            self.load()
+
+        def load(self):
+            self.clear()
+            for s in reversed(fd.load_history()):
+                self.add((f"{datetime.datetime.fromtimestamp(s['ts']):%Y-%m-%d %H:%M}", s.get("label", ""),
+                          human(s["disk_free"]) if "disk_free" in s else "-",
+                          f"{s['mem_percent']:.0f}%" if "mem_percent" in s else "-", s.get("startup", "-"), s.get("procs", "-")), s)
+
+        def record(self):
+            fd.record(tr("手动记录"))
+            self.load()
+
+        def compare_sel(self):
+            sel = self.selected()
+            if len(sel) != 2:
+                return messagebox.showinfo(tr("提示"), tr("请选中恰好两条记录（按住 Ctrl/Shift 多选）。"))
+            a, b = sorted((o for _, o in sel), key=lambda x: x["ts"])
+            name = lambda x: f"{datetime.datetime.fromtimestamp(x['ts']):%m-%d %H:%M} {x.get('label', '')}"  # noqa: E731
+            lines = [tr("对比：{0}  →  {1}", name(a), name(b)), ""]
+            for r in fd.compare(a, b):
+                mark = "✓" if r["better"] else "✗" if r["better"] is False else "="
+                lines.append(f"{mark} {r['title']}: {r['before']} → {r['after']}   ({r['delta']})")
+            lines += ["", tr("✓ 变好   ✗ 变差   = 没变化")]
+            show_text(self, tr("前后对比"), "\n".join(lines))
+
+        def clear_hist(self):
+            if messagebox.askyesno(tr("确认"), tr("清空全部历史记录？")):
+                fd.clear_history()
+                self.load()
+
+    class DiagHub(ttk.Frame):
+        def __init__(self, app):
+            super().__init__(app.nb)
+            self.app = app
+            self.nb2 = ttk.Notebook(self)
+            self.nb2.pack(fill="both", expand=True, padx=4, pady=4)
+            self.subtabs = {}
+            for key, title, cls in (("findings", tr("瓶颈诊断"), DiagTab), ("impact", tr("启动影响"), StartupImpactTab),
+                                    ("compare", tr("前后对比"), CompareTab)):
+                w = cls(app, self.nb2)
+                self.nb2.add(w, text=title)
+                self.subtabs[key] = w
+
+        def show(self, key):
+            self.nb2.select(self.subtabs[key])
+
+    # ------------------------------------------------------------ 还原中心（v0.3）
+    class RestoreTab(ListTab):
+        def __init__(self, app):
+            super().__init__(app, [("kind", tr("类型"), 150, "w"), ("what", tr("项目"), 470, "w"), ("when", tr("时间"), 120, "w"),
+                                   ("size", tr("大小"), 80, "e"), ("where", tr("状态"), 170, "w")])
+            self.manifest = []
+            self.btn(tr("刷新"), self.load)
+            self.btn(tr("全选"), self.select_all)
+            self.btn(tr("还原选中"), self.restore)
+            self.btn(tr("永久删除选中"), self.delete_forever)
+            self.btn(tr("打开工具回收站"), lambda: open_folder(core.TRASH_DIR))
+            self.btn(tr("打开系统回收站"), open_system_trash)
+            self.btn(tr("清空工具回收站"), self.empty)
+            self.load()
+
+        def load(self):
+            self.clear()
+            rows = []
+            for e in core.ledger_prune():
+                if e.get("via") == "tool":
+                    rows.append((e.get("ts", 0), tr("文件（工具回收站）"), e.get("orig", ""), e.get("size", 0), tr("可还原"), ("tool", e)))
+                else:
+                    rows.append((e.get("ts", 0), tr("文件（系统回收站）"), e.get("orig", ""), e.get("size", 0), tr("请在系统回收站还原"), ("system", e)))
+            self.manifest = core.load_manifest()
+            for m in self.manifest:
+                if not m.get("restored"):
+                    rows.append((m.get("ts", 0), tr("启动项"), m.get("name", ""), 0, tr("可还原"), ("startup", m)))
+            rows.sort(key=lambda r: -r[0])
+            for ts, kind, what, size, where, obj in rows:
+                self.add((kind, what, f"{datetime.datetime.fromtimestamp(ts):%Y-%m-%d %H:%M}", human(size) if size else "-", where),
+                         obj, ("keep",) if obj[0] == "system" else ())
+            self.info.config(text=tr("这里列出被 Faster 移走/停用的东西。“垃圾清理”删除的缓存是永久删除的，不在此列。"))
+
+        def restore(self):
+            sel = self.need_selection()
+            if not sel:
+                return
+            lines, failed, n_sys, touched = [], [], 0, False
+            for _, (kind, e) in sel:
+                if kind == "tool":
+                    ok, info = core.restore_from_trash(e)
+                    lines.append(("✔ " if ok else "✗ ") + info)
+                elif kind == "startup":
+                    ok, _m = restore_entry(e)
+                    if ok:
+                        e["restored"], touched = True, True
+                        lines.append("✔ " + e.get("name", ""))
+                    else:
+                        failed.append(e)
+                else:
+                    n_sys += 1
+            if touched:
+                core.save_manifest(self.manifest)
+            if n_sys:
+                lines.append(tr("{0} 条在系统回收站里，请点“打开系统回收站”自行还原。", n_sys))
+            if lines:
+                show_text(self, tr("还原结果"), "\n".join(lines))
+            if failed and messagebox.askyesno(tr("需要管理员权限"), tr("{0} 项恢复失败，可能需要管理员权限。\n现在授权并重试？", len(failed))):
+                keys = [f"{e['ts']}|{e.get('name')}" for e in failed]
+                self.app.run_bg(lambda: run_elevated("restore-startup", keys),
+                                lambda r: (show_text(self, tr("结果"), "\n".join(r.get("lines", []))), self.load()),
+                                tr("等待管理员授权…"))
+            else:
+                self.load()
+
+        def delete_forever(self):
+            sel = [o for _, o in self.need_selection() or [] if o[0] in ("tool", "system")]
+            if not sel or not messagebox.askyesno(tr("确认"), tr("永久删除选中的 {0} 项？此操作不可恢复。", len(sel))):
+                return
+            gone = set()
+            for kind, e in sel:
+                if kind == "tool":
+                    core.purge_from_trash(e)
+                else:
+                    gone.add(core._entry_id(e))                        # 系统回收站里的文件由系统管理，这里只移除记录
+            if gone:
+                core.ledger_save([e for e in core.ledger_load() if core._entry_id(e) not in gone])
+            self.load()
+
+        def empty(self):
+            if messagebox.askyesno(tr("确认"), tr("永久清空工具回收站？此操作不可恢复。")):
+                messagebox.showinfo(tr("完成"), tr("已永久删除，释放 {0}", human(core.empty_tool_trash())))
+                self.load()
 
     # ------------------------------------------------------------ 自动清理
     class ScheduleTab(ttk.Frame):
@@ -1701,39 +1997,65 @@ if tk:
             except tk.TclError:
                 pass
             self.q, self.busy_n = queue.Queue(), 0
+            self.cur_task, self.cur_msg, self.tabs = None, "", {}
             bar = ttk.Frame(self)
             bar.pack(side="bottom", fill="x")
             self.status = ttk.Label(bar, text=tr("就绪"))
             self.status.pack(side="left", padx=8, pady=3)
             self.pb = ttk.Progressbar(bar, mode="indeterminate", length=160)
             self.pb.pack(side="right", padx=8)
+            self.cancel_btn = ttk.Button(bar, text=tr("取消"), command=self.cancel_task)   # 有可取消的任务时才显示
             self.nb = ttk.Notebook(self)
             self.nb.pack(fill="both", expand=True)
-            for title, cls in ((tr("概览"), HomeTab), (tr("垃圾清理"), JunkTab), (tr("大文件"), LargeTab), (tr("重复文件"), DupTab),
-                               (tr("启动项"), StartupTab), (tr("后台进程"), ProcTab), (tr("卸载程序"), UninstallTab),
-                               (tr("风险扫描"), SecurityTab), (tr("钱包安全"), WalletHub), (tr("自动清理"), ScheduleTab)):
-                self.nb.add(cls(self), text=title)
+            for key, title, cls in (("home", tr("概览"), HomeTab), ("junk", tr("垃圾清理"), JunkTab), ("large", tr("大文件"), LargeTab),
+                                    ("dup", tr("重复文件"), DupTab), ("startup", tr("启动项"), StartupTab),
+                                    ("proc", tr("后台进程"), ProcTab), ("uninstall", tr("卸载程序"), UninstallTab),
+                                    ("security", tr("风险扫描"), SecurityTab), ("wallet", tr("钱包安全"), WalletHub),
+                                    ("diag", tr("性能诊断"), DiagHub), ("restore", tr("还原中心"), RestoreTab),
+                                    ("schedule", tr("自动清理"), ScheduleTab)):
+                w = cls(self)
+                self.nb.add(w, text=title)
+                self.tabs[key] = w
             self.after(100, self.poll)
 
-        def run_bg(self, fn, done=None, msg=tr("处理中…")):
+        def run_bg(self, fn, done=None, msg=tr("处理中…"), task=None):
+            """在后台线程运行 fn；task（可选）让底部出现“取消”按钮和进度文字"""
             self.busy_n += 1
             self.status.config(text=msg)
             self.pb.start(12)
+            if task is not None:
+                self.cur_task, self.cur_msg = task, msg
+                self.cancel_btn.pack(side="right", padx=4)
 
             def target():
                 try:
                     res, err = fn(), None
                 except Exception as e:
                     res, err = None, e
-                self.q.put((done, res, err))
+                self.q.put((done, res, err, task))
 
             threading.Thread(target=target, daemon=True).start()
+
+        def cancel_task(self):
+            if self.cur_task is not None:
+                self.cur_task.cancel()
+                self.status.config(text=tr("正在取消…"))
+
+        def goto(self, key, sub=None):
+            """切换到某个标签页（可选：再切到它的子页）"""
+            w = self.tabs[key]
+            self.nb.select(w)
+            if sub and hasattr(w, "show"):
+                w.show(sub)
 
         def poll(self):
             try:
                 while True:
-                    done, res, err = self.q.get_nowait()
+                    done, res, err, task = self.q.get_nowait()
                     self.busy_n -= 1
+                    if task is not None and task is self.cur_task:
+                        self.cur_task = None
+                        self.cancel_btn.pack_forget()
                     if self.busy_n <= 0:
                         self.busy_n = 0
                         self.pb.stop()
@@ -1744,6 +2066,9 @@ if tk:
                         done(res)
             except queue.Empty:
                 pass
+            t = self.cur_task
+            if t is not None and not t.cancelled:
+                self.status.config(text=f"{self.cur_msg}   {t.text[-55:]}  ({t.count})")
             self.after(100, self.poll)
 
 

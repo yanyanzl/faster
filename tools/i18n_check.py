@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-FILES = ["faster.py", "faster_gui.py", "faster_crypto.py"]
+FILES = ["faster.py", "faster_gui.py", "faster_crypto.py", "faster_diag.py"]
 CJK = re.compile(r"[\u4e00-\u9fff]")
 SYSTEM_MATCH = {"要运行的任务", "任务名"}          # 用来匹配中文 Windows 的系统输出，故意不翻译
 

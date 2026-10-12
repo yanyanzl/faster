@@ -680,8 +680,6 @@ CATALOG = {
         "Error",
     "将 {0} 个文件（{1}）移入回收站？":
         "Move {0} files ({1}) to the Recycle Bin?",
-    "已处理 {0} 个文件，释放约 {1}":
-        "Processed {0} files, freed about {1}",
     "灰色“保留”为建议保留的一份（路径最短/最早），只会删除你选中的“副本”。":
         "The greyed-out “Keep” row is the copy suggested to keep (shortest/earliest path); only the “Copy” rows you select will be deleted.",
     "将 {0} 个副本（{1}）移入回收站？":
@@ -1072,4 +1070,220 @@ CATALOG = {
         "The language was changed. The program must restart for it to take full effect. Restart now?",
     "语言 / Language：":
         "Language / 语言: ",
+    "性能诊断":
+        "Diagnostics",
+    "健康分：{0} / 100":
+        "Health score: {0} / 100",
+    "回收站里已找不到该文件":
+        "The file can no longer be found in the trash",
+    "原路径无效":
+        "Invalid original path",
+    "性能诊断（只读）":
+        "Performance diagnosis (read-only)",
+    " (已还原)":
+        " (restored)",
+    "{0}（前）":
+        "{0} (before)",
+    "{0}（后）":
+        "{0} (after)",
+    "效果：{0}":
+        "Effect: {0}",
+    "停用启动项":
+        "Disable startup items",
+    "结束进程":
+        "End processes",
+    "开始诊断":
+        "Start diagnosis",
+    "前往处理":
+        "Go fix it",
+    "诊断中…":
+        "Diagnosing...",
+    "评估启动影响":
+        "Assess startup impact",
+    "评估启动影响…":
+        "Assessing startup impact...",
+    "记录当前状态":
+        "Record current state",
+    "对比选中的两条":
+        "Compare the two selected",
+    "清空历史":
+        "Clear history",
+    "手动记录":
+        "Manual record",
+    "对比：{0}  →  {1}":
+        "Comparison: {0}  →  {1}",
+    "✓ 变好   ✗ 变差   = 没变化":
+        "✓ better   ✗ worse   = unchanged",
+    "前后对比":
+        "Before/after",
+    "清空全部历史记录？":
+        "Clear all history records?",
+    "还原选中":
+        "Restore selected",
+    "永久删除选中":
+        "Delete selected permanently",
+    "打开工具回收站":
+        "Open tool trash",
+    "打开系统回收站":
+        "Open system trash",
+    "清空工具回收站":
+        "Empty tool trash",
+    "永久清空工具回收站？此操作不可恢复。":
+        "Permanently empty the tool trash? This cannot be undone.",
+    "已处理 {0} 个文件（{1}）。文件现在在回收站里，清空回收站后才会真正释放磁盘空间；也可以到“还原中心”还原。":
+        "Processed {0} files ({1}). They are now in the Recycle Bin; disk space is only really freed after you empty it. You can also restore them from the “Restore center”.",
+    "只读测量，不会修改系统，约需 2~10 秒。诊断后选中一行点“前往处理”（或双击）可跳到对应页面。":
+        "Read-only measurement; it does not change the system and takes about 2–10 seconds. After diagnosing, select a row and click “Go fix it” (or double-click) to jump to the matching tab.",
+    "建议":
+        "Advice",
+    "按“正在运行的进程”估算（内存 + 平均 CPU），不是精确的开机耗时；当前没在运行的项目无法评估。":
+        "Estimated from the “running processes” (memory + average CPU); this is not an exact boot time, and items that are not currently running cannot be assessed.",
+    "清理、停用启动项、结束进程时会自动记录“前/后”两条；选中任意两条可以对比。":
+        "A “before/after” pair is recorded automatically when you clean, disable startup items or end processes; select any two entries to compare them.",
+    "请选中恰好两条记录（按住 Ctrl/Shift 多选）。":
+        "Select exactly two records (hold Ctrl/Shift for multiple).",
+    "瓶颈诊断":
+        "Bottlenecks",
+    "启动影响":
+        "Startup impact",
+    "这里列出被 Faster 移走/停用的东西。“垃圾清理”删除的缓存是永久删除的，不在此列。":
+        "This lists things Faster moved away or disabled. Caches deleted by “Junk cleanup” are removed permanently and are not listed.",
+    "{0} 条在系统回收站里，请点“打开系统回收站”自行还原。":
+        "{0} entries are in the system trash; click “Open system trash” to restore them yourself.",
+    "还原结果":
+        "Restore result",
+    "已永久删除，释放 {0}":
+        "Permanently deleted, freed {0}",
+    "取消":
+        "Cancel",
+    "还原中心":
+        "Restore center",
+    "已取消，下面只是已扫描到的 {0} 项部分结果。":
+        "Cancelled; below are only the {0} partial results scanned so far.",
+    "共 {0} 个启动项，其中 {1} 个影响较高。":
+        "{0} startup items, {1} of them with high impact.",
+    "永久删除选中的 {0} 项？此操作不可恢复。":
+        "Permanently delete the {0} selected items? This cannot be undone.",
+    "正在取消…":
+        "Cancelling...",
+    "清理垃圾":
+        "Junk cleanup",
+    "高":
+        "High",
+    "文件（工具回收站）":
+        "File (tool trash)",
+    "可还原":
+        "Restorable",
+    "文件（系统回收站）":
+        "File (system trash)",
+    "请在系统回收站还原":
+        "Restore from the system trash",
+    "中":
+        "Medium",
+    "运行中":
+        "Running",
+    "严重":
+        "Critical",
+    "注意":
+        "Warning",
+    "良好":
+        "Good",
+    "开机后 {0:.1f} 小时":
+        "{0:.1f} h after boot",
+    "磁盘剩余":
+        "Disk free",
+    "内存占用":
+        "Memory used",
+    "内存占用率":
+        "Memory usage",
+    "交换空间占用率":
+        "Swap usage",
+    "开机启动项":
+        "Startup items",
+    "进程数":
+        "Processes",
+    "诊断":
+        "Diagnosis",
+    "开机后 {0:.0f} 秒":
+        "{0:.0f} s after boot",
+    "开机后 {0:.0f} 分钟":
+        "{0:.0f} min after boot",
+    "低":
+        "Low",
+    "未运行":
+        "Not running",
+    "磁盘空间":
+        "Disk space",
+    "剩余 {0}（{1:.0f}%）":
+        "{0} free ({1:.0f}%)",
+    "清理垃圾、大文件和重复文件；卸载不用的大型程序。":
+        "Clean junk, large files and duplicates; uninstall large programs you no longer use.",
+    "已用 {0}（{1:.0f}%）":
+        "{0} used ({1:.0f}%)",
+    "关闭不用的程序和浏览器标签页；长期不够用就增加内存。":
+        "Close programs and browser tabs you don't need; add more memory if it is never enough.",
+    "交换空间":
+        "Swap",
+    "已用 {0:.0f}%":
+        "{0:.0f}% used",
+    "内存吃紧又在大量使用交换空间时电脑会明显变卡：关闭占内存大的程序，或增加内存。":
+        "When memory is tight and swap is heavily used, the computer slows down noticeably: close memory-hungry programs or add more memory.",
+    "内存 / CPU":
+        "Memory / CPU",
+    "无法读取":
+        "Unavailable",
+    "安装 psutil（pip install psutil）后才能诊断内存、CPU 和进程。":
+        "Install psutil (pip install psutil) to diagnose memory, CPU and processes.",
+    "共 {0} 个":
+        "{0} in total",
+    "到“启动影响”页按影响排序，停用不需要的启动项。":
+        "On the “Startup impact” tab, sort by impact and disable the startup items you don't need.",
+    "连续运行时间":
+        "Uptime",
+    "{0:.1f} 天":
+        "{0:.1f} days",
+    "重启一次可以释放内存，并让系统更新生效。":
+        "Restart once to free memory and apply system updates.",
+    "可清理的垃圾":
+        "Reclaimable junk",
+    "约 {0}":
+        "about {0}",
+    "到“垃圾清理”页清理。":
+        "Clean it on the “Junk cleanup” tab.",
+    "电源计划":
+        "Power plan",
+    "需要速度时，在“设置 → 系统 → 电源”里改成“平衡”或“最佳性能”。":
+        "When you need speed, switch to “Balanced” or “Best performance” under Settings → System → Power.",
+    "；占用最多：{0}":
+        "; top memory users: {0}",
+    "CPU":
+        "CPU",
+    "查看“后台进程”页，结束长期高占用且不需要的程序。":
+        "Open the “Processes” tab and end programs that use a lot of CPU for a long time and that you don't need.",
+    "节能":
+        "Power saver",
+    "平衡 / 高性能":
+        "Balanced / High performance",
+    "当前没有运行（可能是一次性任务，无法评估）":
+        "Not running right now (possibly a one-off task; cannot be assessed)",
+    "占用 {0:.0f}%":
+        "{0:.0f}% in use",
+    "无需处理":
+        "Nothing to do",
+    "；占用最高：{0}":
+        "; top CPU users: {0}",
+    "建议停用，需要时再手动打开":
+        "Disable it and start it manually when needed",
+    "可以考虑停用":
+        "Consider disabling it",
+    "影响很小":
+        "Very little impact",
+    "现状":
+        "Current state",
+    "平均 CPU":
+        "Avg CPU",
+    "启动时间点":
+        "Started",
+    "影响":
+        "Impact",
 }

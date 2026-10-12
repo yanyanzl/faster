@@ -18,7 +18,7 @@ Faster Faster  (Windows / macOS / Linux)
 
 依赖：Python 3.8+。可选：pip install psutil send2trash
 """
-__version__ = "0.2.3"
+__version__ = "0.3.0"
 
 import os
 import sys
@@ -141,6 +141,116 @@ def dir_size(path):
     return total
 
 
+# ---- 还原记录（ledger）：记下每个被我们移走的文件原来在哪，“还原中心”据此还原
+LEDGER = TRASH_DIR / "ledger.jsonl"
+
+
+def _size_of(p):
+    try:
+        return dir_size(p) if os.path.isdir(p) else os.path.getsize(p)
+    except OSError:
+        return 0
+
+
+def ledger_add(**e):
+    try:
+        with open(LEDGER, "a", encoding="utf-8") as f:
+            f.write(json.dumps(e, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def ledger_load():
+    out = []
+    try:
+        with open(LEDGER, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        out.append(json.loads(line))
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return out
+
+
+def ledger_save(items):
+    try:
+        LEDGER.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in items[-5000:]), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def ledger_prune():
+    """清掉失效记录：工具回收站里的文件已不存在；系统回收站的记录只保留 90 天。返回剩余记录"""
+    keep, now = [], time.time()
+    for e in ledger_load():
+        if e.get("via") == "tool" and not (TRASH_DIR / e.get("stored", "")).exists():
+            continue
+        if e.get("via") == "system" and now - e.get("ts", 0) > 90 * 86400:
+            continue
+        keep.append(e)
+    ledger_save(keep)
+    return keep
+
+
+def _entry_id(e):
+    return f"{e.get('ts')}|{e.get('stored') or e.get('orig')}"
+
+
+def restore_from_trash(entry):
+    """把工具回收站里的文件还原到原位置（原位置已有同名文件时，加“已还原”后缀，绝不覆盖）。返回 (成功?, 新路径或原因)"""
+    src = TRASH_DIR / entry.get("stored", "")
+    if not src.exists():
+        return False, tr("回收站里已找不到该文件")
+    dest = Path(entry.get("orig", ""))
+    if not dest.is_absolute():
+        return False, tr("原路径无效")
+    if dest.exists():
+        n, base = 0, dest
+        while dest.exists():
+            n += 1
+            dest = base.with_name(f"{base.stem}{tr(' (已还原)')}{'' if n == 1 else n}{base.suffix}")
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dest))
+    except OSError as e:
+        return False, str(e)
+    ledger_save([e for e in ledger_load() if _entry_id(e) != _entry_id(entry)])
+    return True, str(dest)
+
+
+def purge_from_trash(entry):
+    """永久删除工具回收站里的某个文件。返回 True/False"""
+    src = TRASH_DIR / entry.get("stored", "")
+    try:
+        if src.is_dir():
+            shutil.rmtree(src)
+        elif src.exists():
+            src.unlink()
+    except OSError:
+        return False
+    ledger_save([e for e in ledger_load() if _entry_id(e) != _entry_id(entry)])
+    return True
+
+
+def empty_tool_trash():
+    """清空工具回收站（永久删除），返回释放的字节数"""
+    freed = 0
+    for child in TRASH_DIR.iterdir():
+        if child.name == LEDGER.name:
+            continue
+        try:
+            freed += _size_of(child)
+            shutil.rmtree(child) if child.is_dir() else child.unlink()
+        except OSError:
+            pass
+    ledger_prune()
+    return freed
+
+
 def safe_remove(path):
     """进回收站；失败则移动到 ~/.faster/trash（可找回）。钱包文件一律拒绝"""
     path = str(path)
@@ -148,11 +258,14 @@ def safe_remove(path):
         print(tr("   ✗ 已保护（钱包文件），不处理：{0}", path))
         return False
     try:
+        size = _size_of(path)
         if send2trash:
             send2trash(path)
+            ledger_add(via="system", orig=os.path.abspath(path), size=size, ts=int(time.time()))
             return True
-        dest = TRASH_DIR / f"{int(time.time())}_{os.urandom(2).hex()}_{os.path.basename(path)}"
-        shutil.move(path, dest)
+        stored = f"{int(time.time())}_{os.urandom(2).hex()}_{os.path.basename(path)}"
+        shutil.move(path, TRASH_DIR / stored)
+        ledger_add(via="tool", stored=stored, orig=os.path.abspath(path), size=size, ts=int(time.time()))
         return True
     except Exception as e:
         print(tr("   ✗ 无法处理 {0}: {1}", path, e))
@@ -189,10 +302,12 @@ def junk_targets():
     return [(n, p) for n, p in t if p.exists()]
 
 
-def list_files_in(path, min_age_hours=1):
-    """列出目录下（1 小时内未被修改，避免删除正在使用的）文件"""
+def list_files_in(path, min_age_hours=1, task=None):
+    """列出目录下（1 小时内未被修改，避免删除正在使用的）文件；task 可取消并显示进度"""
     now, res = time.time(), []
     for root, _, files in os.walk(path, onerror=lambda e: None):
+        if task is not None and not task.tick(root):
+            break
         for f in files:
             fp = os.path.join(root, f)
             if is_wallet_path(fp):
@@ -253,8 +368,10 @@ SKIP_DIR_SUFFIX = (".app", ".photoslibrary", ".framework", ".bundle")
 SKIP_FILE_EXT = {".dll", ".sys", ".so", ".dylib", ".plist", ".kext", ".drv", ".msi"}
 
 
-def walk_user_files(root, min_size):
+def walk_user_files(root, min_size, task=None):
     for r, dirs, files in os.walk(root, onerror=lambda e: None):
+        if task is not None and not task.tick(r):
+            return
         dirs[:] = [d for d in dirs if d.lower() not in SKIP_DIR_NAMES
                    and not d.lower().endswith(SKIP_DIR_SUFFIX)
                    and not os.path.islink(os.path.join(r, d))]
@@ -900,6 +1017,18 @@ def health_check():
     print(tr("建议依次进入对应菜单处理。"))
 
 
+def perf_check():
+    """命令行：性能诊断（只读）"""
+    import faster_diag as fd
+    header(tr("性能诊断"))
+    r = fd.run_diagnosis()
+    print(tr("健康分：{0} / 100", r["score"]))
+    for f in r["findings"]:
+        print(f"[{f['level']}] {f['title']}: {f['detail']}")
+        if f["level"] != fd.LV_OK:
+            print("      -> " + f["advice"])
+
+
 def choose_language():
     """命令行：选择界面语言（保存后下次启动生效）"""
     import faster_i18n as i18n
@@ -929,6 +1058,7 @@ def menu():
         "7": (tr("潜在风险扫描（病毒/后门迹象）"), security_scan),
         "8": (tr("一键体检（仅检查）"), health_check),
         "9": (tr("语言 / Language"), choose_language),
+        "10": (tr("性能诊断（只读）"), perf_check),
     }
     while True:
         print("\n" + "-" * 40)
