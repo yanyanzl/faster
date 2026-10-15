@@ -18,7 +18,7 @@ Faster Faster  (Windows / macOS / Linux)
 
 依赖：Python 3.8+。可选：pip install psutil send2trash
 """
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 import os
 import sys
@@ -389,6 +389,39 @@ def walk_user_files(root, min_size, task=None):
                     yield fp, st.st_size, st.st_mtime
             except OSError:
                 pass
+
+
+def find_duplicates(root, min_mb=1, task=None):
+    alive = (lambda p=None: True) if task is None else task.tick
+    by_size = defaultdict(list)
+    for fp, sz, mt in walk_user_files(root, int(min_mb * 1048576), task):
+        by_size[sz].append((fp, mt))
+    groups = []
+    for sz, lst in by_size.items():
+        if len(lst) < 2:
+            continue
+        if not alive():
+            break
+        quick = defaultdict(list)
+        for fp, mt in lst:
+            if not alive(fp):
+                break
+            h = sha256(fp, 65536)
+            if h:
+                quick[h].append((fp, mt))
+        for q in quick.values():
+            if len(q) < 2:
+                continue
+            full = defaultdict(list)
+            for fp, mt in q:
+                if not alive(fp):
+                    break
+                h = sha256(fp)
+                if h:
+                    full[h].append((fp, mt))
+            groups += [(sz, sorted(g, key=lambda x: (len(x[0]), x[1]))) for g in full.values() if len(g) > 1]
+    groups.sort(key=lambda x: -x[0] * (len(x[1]) - 1))
+    return groups[:200]
 
 
 def ask_root():
@@ -889,18 +922,27 @@ def scan_persistence():
                             pass
 
 
-def scan_hosts():
-    hosts = Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/drivers/etc/hosts" if IS_WIN else Path("/etc/hosts")
+def hosts_file():
+    return Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/drivers/etc/hosts" if IS_WIN else Path("/etc/hosts")
+
+
+def hosts_entries():
+    """hosts 文件里指向“非本机”的条目 [(域名, IP)]（屏蔽广告用的 127.0.0.1 / 0.0.0.0 不算）"""
+    out = []
     try:
-        for ln in hosts.read_text(errors="replace").splitlines():
-            ln = ln.split("#")[0].strip()
-            parts = ln.split()
+        for ln in hosts_file().read_text(errors="replace").splitlines():
+            parts = ln.split("#")[0].strip().split()
             if len(parts) >= 2 and parts[0] not in ("127.0.0.1", "::1", "0.0.0.0", "255.255.255.255", "::",
                                                      "fe80::1%lo0", "ff02::1", "ff02::2"):
-                add(tr("中危"), tr("hosts 文件将 {0} 指向 {1}（可能被劫持，请确认是否为你自己设置）", parts[1], parts[0]))
+                out.append((parts[1], parts[0]))
     except OSError:
         pass
+    return out
 
+
+def scan_hosts():
+    for host, ip in hosts_entries():
+        add(tr("中危"), tr("hosts 文件将 {0} 指向 {1}（可能被劫持，请确认是否为你自己设置）", host, ip))
 
 def scan_temp_executables():
     dirs = [Path(os.environ.get("TEMP", ""))] if IS_WIN else [Path("/tmp"), Path("/var/tmp"), Path("/dev/shm")]
@@ -928,37 +970,49 @@ def walk_user_files_any(root):
                 pass
 
 
-def scan_security_posture():
+def security_posture_items():
+    """系统防护检查，返回 [dict(key, level, msg)]；level 是“高危/中危/提示”（当前语言）。
+    key：defender_rt / defender_old / firewall / gatekeeper / sip / mac_fw / linux_fw"""
+    out = []
+
+    def item(key, level, msg):
+        out.append(dict(key=key, level=level, msg=msg))
+
     if IS_WIN:
-        rc, out, _ = run(["powershell", "-NoProfile", "-Command",
+        rc, txt, _ = run(["powershell", "-NoProfile", "-Command",
                           "Get-MpComputerStatus | Select AntivirusEnabled,RealTimeProtectionEnabled,"
                           "AntivirusSignatureAge | Format-List"], timeout=30)
-        if rc == 0 and out.strip():
-            if re.search(r"RealTimeProtectionEnabled\s*:\s*False", out):
-                add(tr("中危"), tr("Windows Defender 实时保护未开启（若已安装其它杀毒软件可忽略）"))
-            m = re.search(r"AntivirusSignatureAge\s*:\s*(\d+)", out)
+        if rc == 0 and txt.strip():
+            if re.search(r"RealTimeProtectionEnabled\s*:\s*False", txt):
+                item("defender_rt", tr("中危"), tr("Windows Defender 实时保护未开启（若已安装其它杀毒软件可忽略）"))
+            m = re.search(r"AntivirusSignatureAge\s*:\s*(\d+)", txt)
             if m and int(m.group(1)) > 7:
-                add(tr("中危"), tr("病毒库已 {0} 天未更新", m.group(1)))
-        rc, out, _ = run(["netsh", "advfirewall", "show", "allprofiles", "state"])
-        if re.search(r"OFF|关闭", out):
-            add(tr("中危"), tr("Windows 防火墙有配置文件处于关闭状态"))
+                item("defender_old", tr("中危"), tr("病毒库已 {0} 天未更新", m.group(1)))
+        rc, txt, _ = run(["netsh", "advfirewall", "show", "allprofiles", "state"])
+        if re.search(r"OFF|关闭", txt):
+            item("firewall", tr("中危"), tr("Windows 防火墙有配置文件处于关闭状态"))
     elif IS_MAC:
-        _, out, _ = run(["spctl", "--status"])
-        if "disabled" in out:
-            add(tr("高危"), tr("Gatekeeper 已被关闭，系统会运行未签名程序"))
-        _, out, _ = run(["csrutil", "status"])
-        if "disabled" in out:
-            add(tr("中危"), tr("SIP（系统完整性保护）已关闭"))
-        _, out, _ = run(["defaults", "read", "/Library/Preferences/com.apple.alf", "globalstate"])
-        if out.strip() == "0":
-            add(tr("提示"), tr("macOS 防火墙未开启"))
+        _, txt, _ = run(["spctl", "--status"])
+        if "disabled" in txt:
+            item("gatekeeper", tr("高危"), tr("Gatekeeper 已被关闭，系统会运行未签名程序"))
+        _, txt, _ = run(["csrutil", "status"])
+        if "disabled" in txt:
+            item("sip", tr("中危"), tr("SIP（系统完整性保护）已关闭"))
+        _, txt, _ = run(["defaults", "read", "/Library/Preferences/com.apple.alf", "globalstate"])
+        if txt.strip() == "0":
+            item("mac_fw", tr("提示"), tr("macOS 防火墙未开启"))
     else:
         if shutil.which("systemctl"):
-            _, out, _ = run(["systemctl", "is-active", "ufw"])
-            _, out2, _ = run(["systemctl", "is-active", "firewalld"])
-            if "active" not in (out.strip(), out2.strip()) and "active\n" not in (out + out2):
-                add(tr("提示"), tr("未检测到 ufw / firewalld 防火墙在运行"))
+            _, a, _ = run(["systemctl", "is-active", "ufw"])
+            _, b, _ = run(["systemctl", "is-active", "firewalld"])
+            if "active" not in (a.strip(), b.strip()) and "active\n" not in (a + b):
+                item("linux_fw", tr("提示"), tr("未检测到 ufw / firewalld 防火墙在运行"))
+    return out
 
+
+def scan_security_posture():
+    for it in security_posture_items():
+        add(it["level"], it["msg"])
 
 def av_engine_scan():
     if IS_WIN:

@@ -462,8 +462,6 @@ CATALOG = {
         "{0}: freed {1}",
     "未找到 pkexec（polkit）。请安装 policykit-1，或在终端用 sudo 运行本程序。":
         "pkexec (polkit) not found. Install policykit-1, or run this program with sudo in a terminal.",
-    "使用提示：\n  • 所有删除/停用操作都会先让你确认；被删文件优先进回收站（或工具回收站，可找回）。\n  • “自动清理”页可设置每天/每周/每月定时清理，由系统计划任务执行，不需要保持本程序运行。\n  • “钱包安全”页：钱包文件自动受保护、助记词/私钥泄露扫描、挖矿检测、剪贴板劫持守护。\n  • 风险扫描为启发式检测，不能替代专业杀毒软件。":
-        "Tips:\n  • Every delete/disable action asks you to confirm first; deleted files go to the Recycle Bin (or the tool's own trash) and can be recovered.\n  • On the “Auto clean” tab you can schedule daily/weekly/monthly cleaning; it is run by the system scheduler, so this program doesn't need to stay open.\n  • “Wallet security” tab: automatic wallet-file protection, mnemonic/private-key leak scan, miner detection, clipboard-hijack guard.\n  • The risk scan is a heuristic check and cannot replace professional antivirus software.",
     "来源：{0}\n文件：{1}\n单词数：{2}（BIP39 英文词表固定为 2048 个，每个词对应 11 位）\nSHA-256：{3}\n校验：✓ 2048 个互不相同、按字母排序、前 4 个字母可唯一区分；✓ 通过 BIP39 官方测试向量\n官方来源：{4}":
         "Source: {0}\nFile: {1}\nWords: {2} (the BIP39 English list is fixed at 2048 words; each word encodes 11 bits)\nSHA-256: {3}\nVerification: ✓ 2048 distinct words, sorted alphabetically, first 4 letters unique; ✓ passes the official BIP39 test vectors\nOfficial source: {4}",
     "已扫描 {0} 个文件：高危 {1} · 中危 {2} · 提示 {3}。":
@@ -500,8 +498,6 @@ CATALOG = {
         "Note: system-level LaunchAgents only take full effect after you log out and back in",
     "不支持的操作：{0}":
         "Unsupported action: {0}",
-    "体检中…":
-        "Checking...",
     "扫描":
         "Scan",
     "全选":
@@ -910,10 +906,6 @@ CATALOG = {
         "Browse...",
     "版本 v{0} · {1} {2} · 当前：{3}权限":
         "Version v{0} · {1} {2} · Current: {3} privileges",
-    "一键体检（只检查，不修改）":
-        "Quick health check (read-only, changes nothing)",
-    "可清理垃圾：约 {0}\n开机启动项：{1} 个\n建议到对应页面处理。":
-        "Reclaimable junk: about {0}\nStartup items: {1}\nHandle them on the matching tabs.",
     "清理浏览器缓存后网页首次加载会稍慢，不会丢失密码/书签":
         "After clearing browser caches, pages load slightly slower the first time; passwords/bookmarks are not lost",
     "可释放合计 {0}":
@@ -1092,10 +1084,6 @@ CATALOG = {
         "Disable startup items",
     "结束进程":
         "End processes",
-    "开始诊断":
-        "Start diagnosis",
-    "前往处理":
-        "Go fix it",
     "诊断中…":
         "Diagnosing...",
     "评估启动影响":
@@ -1132,8 +1120,6 @@ CATALOG = {
         "Permanently empty the tool trash? This cannot be undone.",
     "已处理 {0} 个文件（{1}）。文件现在在回收站里，清空回收站后才会真正释放磁盘空间；也可以到“还原中心”还原。":
         "Processed {0} files ({1}). They are now in the Recycle Bin; disk space is only really freed after you empty it. You can also restore them from the “Restore center”.",
-    "只读测量，不会修改系统，约需 2~10 秒。诊断后选中一行点“前往处理”（或双击）可跳到对应页面。":
-        "Read-only measurement; it does not change the system and takes about 2–10 seconds. After diagnosing, select a row and click “Go fix it” (or double-click) to jump to the matching tab.",
     "建议":
         "Advice",
     "按“正在运行的进程”估算（内存 + 平均 CPU），不是精确的开机耗时；当前没在运行的项目无法评估。":
@@ -1142,8 +1128,6 @@ CATALOG = {
         "A “before/after” pair is recorded automatically when you clean, disable startup items or end processes; select any two entries to compare them.",
     "请选中恰好两条记录（按住 Ctrl/Shift 多选）。":
         "Select exactly two records (hold Ctrl/Shift for multiple).",
-    "瓶颈诊断":
-        "Bottlenecks",
     "启动影响":
         "Startup impact",
     "这里列出被 Faster 移走/停用的东西。“垃圾清理”删除的缓存是永久删除的，不在此列。":
@@ -1278,12 +1262,224 @@ CATALOG = {
         "Consider disabling it",
     "影响很小":
         "Very little impact",
-    "现状":
-        "Current state",
     "平均 CPU":
         "Avg CPU",
     "启动时间点":
         "Started",
     "影响":
         "Impact",
+    "使用提示：\n  • 不知道从哪开始？点上面的“一键诊断”，按结果里的按钮处理即可。\n  • 所有删除/停用操作都会先让你确认；被删文件优先进回收站（或工具回收站，可找回）。\n  • “自动清理”页可设置每天/每周/每月定时清理，由系统计划任务执行，不需要保持本程序运行。\n  • “钱包安全”页：钱包文件自动受保护、助记词/私钥泄露扫描、挖矿检测、剪贴板劫持守护。\n  • 风险扫描为启发式检测，不能替代专业杀毒软件。":
+        "Tips:\n  • Not sure where to start? Click “One-click diagnosis” above and use the buttons in the results.\n  • Every delete/disable action asks you to confirm first; deleted files go to the Recycle Bin (or the tool's own trash) and can be recovered.\n  • On the “Auto clean” tab you can schedule daily/weekly/monthly cleaning; it is run by the system scheduler, so this program doesn't need to stay open.\n  • “Wallet security” tab: automatic wallet-file protection, mnemonic/private-key leak scan, miner detection, clipboard-hijack guard.\n  • The risk scan is a heuristic check and cannot replace professional antivirus software.",
+    "💡 建议操作（来自上次诊断）":
+        "💡 Suggested actions (from the last diagnosis)",
+    "只读检查，不会改动系统。点“开始诊断”，每个问题后面会有可以直接执行或跳转到对应页面的按钮。":
+        "Read-only checks; nothing on your system is changed. Click “Start diagnosis”: every problem comes with buttons that run the fix directly or jump to the right page.",
+    "{0}（{1} 项待处理）":
+        "{0} ({1} to handle)",
+    "{0}（正常）":
+        "{0} (all good)",
+    "全面诊断":
+        "Full diagnosis",
+    "这个系统没有对应的设置页面，请在系统设置里手动查找。":
+        "This system has no matching settings page; please look for it in the system settings.",
+    "结束进程 {0}？未保存的数据会丢失。":
+        "End process {0}? Unsaved data will be lost.",
+    "已结束 {0}":
+        "Ended {0}",
+    "没有影响较高的启动项。":
+        "No startup items with high impact.",
+    "🔍 一键诊断（性能 / 存储 / 安全 / 钱包）":
+        "🔍 One-click diagnosis (performance / storage / security / wallet)",
+    "只检查不改动；发现问题后每一项都有可以直接执行的按钮。":
+        "Checks only, changes nothing; every problem found comes with buttons that run the fix directly.",
+    "将清理 {0} 类垃圾，共约 {1}。继续？":
+        "About to clean {0} kinds of junk, about {1} in total. Continue?",
+    "🔍 开始诊断":
+        "🔍 Start diagnosis",
+    "深度诊断（较慢：大文件、重复文件、整个主目录的钱包与密钥扫描、深度风险扫描）":
+        "Deep diagnosis (slower: large files, duplicates, wallet & key scan of the whole home folder, deep risk scan)",
+    "显示正常项目":
+        "Show items that are fine",
+    "已取消，下面只是已完成部分的结果。":
+        "Cancelled; below are only the results completed so far.",
+    "诊断完成：{0} 项需要处理。点右侧按钮可以直接处理或跳转；对应页面顶部也会列出建议操作。":
+        "Diagnosis finished: {0} items need attention. Use the buttons on the right to fix them directly or jump to the page; the matching pages also list the suggested actions at the top.",
+    "还没有诊断。点上面的“开始诊断”。":
+        "No diagnosis yet. Click “Start diagnosis” above.",
+    "✓ 没有发现问题":
+        "✓ No problems found",
+    "已处理":
+        "Done",
+    "性能":
+        "Performance",
+    "存储":
+        "Storage",
+    "安全":
+        "Security",
+    "钱包":
+        "Wallet",
+    "打开 Windows 安全中心":
+        "Open Windows Security",
+    "打开防火墙设置":
+        "Open firewall settings",
+    "打开“隐私与安全性”":
+        "Open “Privacy & Security”",
+    "正在检查：性能与磁盘":
+        "Checking: performance and disk",
+    "确认里面没有需要的文件后清空。":
+        "Empty it after making sure nothing you need is inside.",
+    "打开系统安全设置，检查并开启。":
+        "Open the system security settings, check it and turn it on.",
+    "可以用 sudo ufw enable 启用防火墙。":
+        "You can enable the firewall with sudo ufw enable.",
+    "正在检查：挖矿木马":
+        "Checking: mining trojans",
+    "正在检查：内存与 CPU":
+        "Checking: memory and CPU",
+    "正在检查：{0}":
+        "Checking: {0}",
+    "查看占用内存的程序":
+        "See which programs use the memory",
+    "回收站里还有 {0}，清空后才会真正释放空间":
+        "The trash still holds {0}; space is only really freed after you empty it",
+    "占用 {0}":
+        "Uses {0}",
+    "工具回收站":
+        "Tool trash",
+    "Faster 的回收站占用 {0}":
+        "Faster's own trash uses {0}",
+    "到“还原中心”确认没有需要还原的文件后，再永久清空。":
+        "Check the “Restore center” for files you may want back, then empty it permanently.",
+    "正在查找重复文件…（较慢）":
+        "Looking for duplicate files... (slow)",
+    "系统防护":
+        "System protection",
+    "防火墙、杀毒、系统保护状态正常":
+        "Firewall, antivirus and system protection look fine",
+    "可疑启动项":
+        "Suspicious startup item",
+    "如果不是你安装的软件，请停用。":
+        "If you did not install this software, disable it.",
+    "另有 {0} 个":
+        "{0} more",
+    "到“启动项”页逐个确认。":
+        "Review them one by one on the “Startup” tab.",
+    "启动项安全":
+        "Startup safety",
+    "没有发现可疑的启动项":
+        "No suspicious startup items found",
+    "hosts 文件被改动":
+        "The hosts file was modified",
+    "确认这些条目是你自己添加的；不是的话请删除（需要管理员权限）。":
+        "Make sure you added these entries yourself; if not, remove them (administrator rights needed).",
+    "正在做深度风险扫描…":
+        "Running the deep risk scan...",
+    "深度风险扫描":
+        "Deep risk scan",
+    "高危 {0} · 中危 {1} · 提示 {2}":
+        "High {0} · Medium {1} · Info {2}",
+    "到“风险扫描”页查看每一项的详情。":
+        "Open the “Risk scan” tab for details on every item.",
+    "未加载，无法检测助记词":
+        "Not loaded, so mnemonics can't be detected",
+    "下载词表（约 13KB，来自 BIP39 官方仓库，下载后会校验）后才能检测助记词。":
+        "Download the word list (about 13KB, from the official BIP39 repo, verified after download) to enable mnemonic detection.",
+    "正在扫描主目录里的明文密钥…":
+        "Scanning your home folder for plaintext keys...",
+    "正在查找钱包文件…":
+        "Looking for wallet files...",
+    "结束 {0}":
+        "End {0}",
+    "查看占用 CPU 的程序":
+        "See which programs use the CPU",
+    "打开回收站查看":
+        "Open the trash to look",
+    "正在查找大文件…":
+        "Looking for large files...",
+    "有 {0} 个超过 500MB 的文件，共 {1}；最大的是 {2}（{3}）":
+        "{0} files are larger than 500MB, {1} in total; the largest is {2} ({3})",
+    "确认哪些不再需要，删除或移到外置硬盘。":
+        "Decide which ones you no longer need, then delete them or move them to an external drive.",
+    "没有超过 500MB 的文件":
+        "No files larger than 500MB",
+    "到挖矿检测页查看":
+        "Open the miner detection tab",
+    "疑似挖矿程序":
+        "Suspected miner",
+    "如果不是你自己运行的，请结束它并查杀。":
+        "If you did not run it yourself, end it and scan your computer.",
+    "未发现挖矿迹象":
+        "No signs of mining found",
+    "云同步目录里的明文密钥":
+        "Plaintext keys in a cloud-synced folder",
+    "在云同步目录里发现 {0} 处明文助记词/私钥":
+        "Found {0} plaintext mnemonics/private keys in a cloud-synced folder",
+    "云端会留有副本。建议把资产转到新钱包（新助记词），并删除这些明文文件。":
+        "The cloud keeps a copy. Move your assets to a new wallet (new mnemonic) and delete these plaintext files.",
+    "云同步目录里的钱包文件":
+        "Wallet files in a cloud-synced folder",
+    "在云同步目录里发现 {0} 个钱包文件":
+        "Found {0} wallet files in a cloud-synced folder",
+    "云端会留有副本。建议迁出这些文件，并确认助记词已离线备份。":
+        "The cloud keeps a copy. Move these files out and make sure the mnemonic is backed up offline.",
+    "云同步目录":
+        "Cloud-synced folders",
+    "云同步目录里没有发现钱包文件或明文密钥":
+        "No wallet files or plaintext keys found in cloud-synced folders",
+    "查找大文件":
+        "Find large files",
+    "停用影响高的启动项":
+        "Disable startup items with high impact",
+    "清理垃圾（约 {0}）":
+        "Clean junk (about {0})",
+    "打开电源设置":
+        "Open power settings",
+    "到还原中心查看":
+        "Look in the Restore center",
+    "永久清空":
+        "Empty permanently",
+    "发现 {0} 组重复文件，约浪费 {1}":
+        "Found {0} groups of duplicate files, wasting about {1}",
+    "保留一份，删除多余的副本。":
+        "Keep one copy and delete the extra copies.",
+    "没有发现明显浪费空间的重复文件":
+        "No duplicate files that waste noticeable space",
+    "停用":
+        "Disable",
+    "到启动项页查看":
+        "Look at it on the Startup tab",
+    "打开 hosts 所在文件夹":
+        "Open the folder that holds hosts",
+    "查看详情":
+        "View details",
+    "下载词表":
+        "Download word list",
+    "正在检查：云同步目录 {0}":
+        "Checking: cloud-synced folder {0}",
+    "明文助记词 / 私钥":
+        "Plaintext mnemonics / private keys",
+    "在主目录发现 {0} 处明文助记词/私钥":
+        "Found {0} plaintext mnemonics/private keys in your home folder",
+    "建议把资产转到新钱包（新助记词），助记词抄在纸上离线保存，并删除/加密这些明文文件。":
+        "Move your assets to a new wallet (new mnemonic), write the mnemonic on paper and keep it offline, and delete/encrypt these plaintext files.",
+    "主目录里没有发现明文助记词/私钥":
+        "No plaintext mnemonics/private keys found in your home folder",
+    "发现 {0} 个钱包文件（{1} 个在云同步目录里），已受 Faster 保护":
+        "Found {0} wallet files ({1} of them in cloud-synced folders); Faster protects them",
+    "这一项没有检查完：{0}":
+        "This check did not finish: {0}",
+    "查看大文件":
+        "View large files",
+    "查看并处理":
+        "View and handle",
+    "查看钱包文件":
+        "View wallet files",
+    "打开该文件夹":
+        "Open the folder",
+    "在云同步目录里的建议迁出，并确认助记词已离线备份。":
+        "Move the ones in cloud-synced folders out, and make sure the mnemonic is backed up offline.",
+    "确认助记词已离线备份。":
+        "Make sure the mnemonic is backed up offline.",
+    "查看重复文件":
+        "View duplicate files",
 }

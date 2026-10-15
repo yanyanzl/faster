@@ -137,6 +137,32 @@ def cloud_hint(path):
     return ""
 
 
+def cloud_roots():
+    """本机上的云同步目录（OneDrive / Dropbox / iCloud / Google Drive / pCloud / MEGA / 坚果云…）"""
+    found = []
+
+    def add(p):
+        try:
+            p = Path(p)
+            if p.is_dir() and str(p) not in [str(x) for x in found]:
+                found.append(p)
+        except OSError:
+            pass
+
+    for v in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        if os.environ.get(v):
+            add(os.environ[v])
+    add(HOME / "Library/Mobile Documents/com~apple~CloudDocs")
+    keys = ("onedrive", "dropbox", "google drive", "googledrive", "icloud", "pcloud", "mega", "nutstore", "坚果云", "baidunetdisk")
+    try:
+        for child in HOME.iterdir():
+            if child.is_dir() and any(k in child.name.lower() for k in keys):
+                add(child)
+    except OSError:
+        pass
+    return found
+
+
 _NOISE_DIRS = {"node_modules", ".git", "site-packages", "__pycache__", "$recycle.bin", "system volume information",
                "windows", "program files", "program files (x86)", "programdata", "cache", "code cache", "gpucache",
                "service worker", ".cache", ".npm", ".cargo", ".rustup", ".gradle", ".m2", ".venv", "venv", ".trash",
