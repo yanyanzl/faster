@@ -43,6 +43,9 @@ if "--elevated" in sys.argv and "--home" in sys.argv:
 import faster as core  # noqa: E402
 import faster_crypto as fc  # noqa: E402
 import faster_diag as fd  # noqa: E402
+import faster_theme as theme  # noqa: E402
+import faster_sig as sig  # noqa: E402
+import faster_baseline as bl  # noqa: E402
 from faster_task import Task  # noqa: E402
 import faster_i18n as i18n  # noqa: E402
 from faster_i18n import tr  # noqa: E402
@@ -676,6 +679,27 @@ def restart_app():
         return False
 
 
+_SECURITY_MAC = ["open", "x-apple.systempreferences:com.apple.preference.security"]
+_SETTINGS = {   # what -> {系统: 命令}
+    "defender": {"win": ["cmd", "/c", "start", "", "windowsdefender:"]},
+    "firewall": {"win": ["control", "firewall.cpl"]},
+    "power": {"win": ["control", "powercfg.cpl"], "mac": ["open", "x-apple.systempreferences:com.apple.preference.battery"]},
+    "windows_update": {"win": ["cmd", "/c", "start", "", "ms-settings:windowsupdate"]},
+    "remote_desktop": {"win": ["cmd", "/c", "start", "", "ms-settings:remotedesktop"]},
+    "bitlocker": {"win": ["control", "/name", "Microsoft.BitLockerDriveEncryption"]},
+    "mac_security": {"mac": _SECURITY_MAC}, "mac_filevault": {"mac": _SECURITY_MAC},
+    "mac_update": {"mac": ["open", "x-apple.systempreferences:com.apple.preferences.softwareupdate"]},
+    "mac_users": {"mac": ["open", "x-apple.systempreferences:com.apple.preferences.users"]},
+    "mac_sharing": {"mac": ["open", "x-apple.systempreferences:com.apple.preferences.sharing"]},
+    "mac_backup": {"mac": ["open", "x-apple.systempreferences:com.apple.prefs.backup"]},
+}
+
+
+def settings_command(what):
+    """“打开系统设置”要运行的命令；这个系统上没有对应页面返回 None"""
+    return _SETTINGS.get(what, {}).get("win" if IS_WIN else "mac" if IS_MAC else "linux")
+
+
 def empty_system_trash():
     """清空系统回收站 / 废纸篓，返回释放的字节数（Windows 无法得知，返回 0）"""
     if IS_WIN:
@@ -779,7 +803,7 @@ if tk:
             self.app, self.data = app, {}
             self.top = ttk.Frame(self)
             self.top.pack(fill="x", padx=8, pady=6)
-            self.info = ttk.Label(self, text="", foreground="#555")
+            self.info = ttk.Label(self, text="", foreground=theme.PALETTE["muted"])
             self.info.pack(side="bottom", fill="x", padx=8, pady=4)
             body = ttk.Frame(self)
             body.pack(fill="both", expand=True, padx=8, pady=2)
@@ -791,6 +815,7 @@ if tk:
             self.tree.configure(yscrollcommand=vs.set)
             self.tree.pack(side="left", fill="both", expand=True)
             vs.pack(side="right", fill="y")
+            self.tree.tag_configure("odd", background=theme.PALETTE["stripe"])
             self.tree.tag_configure("keep", foreground="#999")
             self.tree.tag_configure("high", foreground="#c62828")
             self.tree.tag_configure("mid", foreground="#e65100")
@@ -808,6 +833,7 @@ if tk:
             self.data.clear()
 
         def add(self, values, obj, tags=()):
+            tags = tuple(tags) + (("odd",) if len(self.data) % 2 else ())        # 斑马纹
             iid = self.tree.insert("", "end", values=values, tags=tags)
             self.data[iid] = obj
             return iid
@@ -841,40 +867,63 @@ if tk:
         def __init__(self, app):
             super().__init__(app.nb)
             self.app = app
-            ttk.Label(self, text="Faster", font=("", 20, "bold")).pack(anchor="w", padx=18, pady=(16, 2))
-            ttk.Label(self, text=tr("版本 v{0} · {1} {2} · 当前：{3}权限", __version__, platform.system(), platform.release(), tr("管理员") if core.is_admin() else tr("普通用户"))).pack(anchor="w", padx=18)
-            lrow = ttk.Frame(self)
-            lrow.pack(anchor="w", padx=18, pady=(6, 0))
-            ttk.Label(lrow, text=tr("语言 / Language：")).pack(side="left")
+            P = theme.PALETTE
+            banner = tk.Frame(self, bg=P["header"])
+            banner.pack(fill="x")
+            left = tk.Frame(banner, bg=P["header"])
+            left.pack(side="left", padx=24, pady=16)
+            tk.Label(left, text="Faster", font=("", 26, "bold"), fg="#ffffff", bg=P["header"]).pack(anchor="w")
+            tk.Label(left, text=tr("让电脑更快、更安全"), fg="#c7d2fe", bg=P["header"]).pack(anchor="w")
+            right = tk.Frame(banner, bg=P["header"])
+            right.pack(side="right", padx=24)
+            tk.Label(right, fg="#c7d2fe", bg=P["header"],
+                     text=tr("版本 v{0} · {1} {2} · 当前：{3}权限", __version__, platform.system(), platform.release(),
+                             tr("管理员") if core.is_admin() else tr("普通用户"))).pack(anchor="e")
+            lrow = tk.Frame(right, bg=P["header"])
+            lrow.pack(anchor="e", pady=(8, 0))
+            tk.Label(lrow, text=tr("语言 / Language："), fg="#c7d2fe", bg=P["header"]).pack(side="left")
             self.lang_codes = ["auto"] + list(i18n.LANGUAGES)
             self.lang_box = ttk.Combobox(lrow, state="readonly", width=16, values=[
                 tr("跟随系统") if c == "auto" else i18n.LANGUAGES[c] for c in self.lang_codes])
             self.lang_box.current(self.lang_codes.index(i18n.saved_language()))
             self.lang_box.pack(side="left", padx=6)
             self.lang_box.bind("<<ComboboxSelected>>", self.change_language)
+
+            hero = ttk.Frame(self)
+            hero.pack(fill="x", padx=24, pady=(20, 6))
+            ttk.Button(hero, text=tr("🔍 一键诊断（性能 / 存储 / 安全 / 钱包）"), style="Accent.TButton",
+                       command=self.diagnose).pack(side="left", ipadx=8, ipady=4)
+            ttk.Label(hero, text=tr("只检查不改动；发现问题后每一项都有可以直接执行的按钮。"), style="Muted.TLabel").pack(side="left", padx=14)
             if not core.is_admin():
                 row = ttk.Frame(self)
-                row.pack(anchor="w", padx=18, pady=(6, 0))
+                row.pack(fill="x", padx=24, pady=(2, 0))
                 if IS_WIN:
-                    ttk.Button(row, text=tr("🛡 以管理员身份重新启动（一次授权，全部功能可用）"),
-                               command=self.relaunch).pack(side="left")
-                ttk.Label(row, text=tr("也可不重启：需要管理员权限的功能会按提示单独授权") if IS_WIN else
-                          tr("需要管理员权限的功能会按提示弹出系统授权窗口（输入开机密码即可）"),
-                          foreground="#555").pack(side="left", padx=8)
-            box = ttk.Frame(self)
-            box.pack(fill="x", padx=18, pady=14)
+                    ttk.Button(row, text=tr("🛡 以管理员身份重新启动（一次授权，全部功能可用）"), command=self.relaunch).pack(side="left")
+                ttk.Label(row, style="Muted.TLabel",
+                          text=tr("也可不重启：需要管理员权限的功能会按提示单独授权") if IS_WIN else
+                          tr("需要管理员权限的功能会按提示弹出系统授权窗口（输入开机密码即可）")).pack(side="left", padx=8)
+
+            cards = ttk.Frame(self)
+            cards.pack(fill="x", padx=24, pady=14)
             self.bars = {}
-            for key, label in (("disk", tr("磁盘")), ("mem", tr("内存")), ("cpu", "CPU")):
-                ttk.Label(box, text=label, width=6).grid(row=len(self.bars), column=0, sticky="w", pady=4)
-                pb = ttk.Progressbar(box, length=420, maximum=100)
-                pb.grid(row=len(self.bars), column=1, pady=4)
-                lb = ttk.Label(box, text="…", width=34)
-                lb.grid(row=len(self.bars), column=2, padx=8, sticky="w")
-                self.bars[key] = (pb, lb)
-            ttk.Button(self, text=tr("🔍 一键诊断（性能 / 存储 / 安全 / 钱包）"), command=self.diagnose).pack(anchor="w", padx=18, ipadx=12, ipady=6)
-            ttk.Label(self, text=tr("只检查不改动；发现问题后每一项都有可以直接执行的按钮。"), foreground="#555").pack(anchor="w", padx=18, pady=(4, 6))
-            tips = (tr("使用提示：\n  • 不知道从哪开始？点上面的“一键诊断”，按结果里的按钮处理即可。\n  • 所有删除/停用操作都会先让你确认；被删文件优先进回收站（或工具回收站，可找回）。\n  • “自动清理”页可设置每天/每周/每月定时清理，由系统计划任务执行，不需要保持本程序运行。\n  • “钱包安全”页：钱包文件自动受保护、助记词/私钥泄露扫描、挖矿检测、剪贴板劫持守护。\n  • 风险扫描为启发式检测，不能替代专业杀毒软件。"))
-            ttk.Label(self, text=tips, foreground="#555", justify="left").pack(anchor="w", padx=18, pady=10)
+            for col, (key, label) in enumerate((("disk", tr("磁盘")), ("mem", tr("内存")), ("cpu", "CPU"))):
+                cards.columnconfigure(col, weight=1, uniform="cards")
+                card = tk.Frame(cards, bg=P["card"], highlightthickness=1, highlightbackground=P["line"])
+                card.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 12, 0))
+                tk.Label(card, text=label, fg=P["muted"], bg=P["card"]).pack(anchor="w", padx=16, pady=(14, 0))
+                big = tk.Label(card, text="--", font=("", 24, "bold"), fg=P["text"], bg=P["card"])
+                big.pack(anchor="w", padx=16)
+                pb = ttk.Progressbar(card, maximum=100)
+                pb.pack(fill="x", padx=16, pady=(2, 8))
+                lb = tk.Label(card, text="…", fg=P["muted"], bg=P["card"], justify="left")
+                lb.pack(anchor="w", padx=16, pady=(0, 14))
+                self.bars[key] = (pb, lb, big)
+
+            tips = tk.Frame(self, bg=P["card"], highlightthickness=1, highlightbackground=P["line"])
+            tips.pack(fill="x", padx=24, pady=(4, 12))
+            tk.Label(tips, bg=P["card"], fg=P["muted"], justify="left", anchor="w",
+                     text=tr("使用提示：\n  • 不知道从哪开始？点上面的“一键诊断”，按结果里的按钮处理即可。\n  • 所有删除/停用操作都会先让你确认；被删文件优先进回收站（或工具回收站，可找回）。\n  • “自动清理”页可设置每天/每周/每月定时清理，由系统计划任务执行，不需要保持本程序运行。\n  • “钱包安全”页：钱包文件自动受保护、助记词/私钥泄露扫描、挖矿检测、剪贴板劫持守护。\n  • 风险扫描为启发式检测，不能替代专业杀毒软件。")
+                     ).pack(anchor="w", padx=16, pady=12)
             self.refresh()
 
         def change_language(self, _e=None):
@@ -893,25 +942,30 @@ if tk:
             else:
                 messagebox.showwarning(tr("提示"), tr("未能获得管理员权限（授权被取消）。"))
 
+        def _set(self, key, pct, detail):
+            pb, lb, big = self.bars[key]
+            pb["value"] = pct if pct is not None else 0
+            big.config(text="--" if pct is None else f"{pct:.0f}%",
+                       fg=theme.PALETTE["text"] if pct is None else theme.score_color(100 - pct))
+            lb.config(text=detail)
+
         def refresh(self):
             du = shutil.disk_usage(HOME)
-            self.bars["disk"][0]["value"] = du.used / du.total * 100
-            self.bars["disk"][1].config(text=tr("已用 {0} / 共 {1}（剩 {2}）", human(du.used), human(du.total), human(du.free)))
+            self._set("disk", du.used / du.total * 100, tr("已用 {0} / 共 {1}（剩 {2}）", human(du.used), human(du.total), human(du.free)))
             if psutil:
                 vm = psutil.virtual_memory()
-                self.bars["mem"][0]["value"] = vm.percent
-                self.bars["mem"][1].config(text=tr("已用 {0} / 共 {1}", human(vm.used), human(vm.total)))
+                self._set("mem", vm.percent, tr("已用 {0} / 共 {1}", human(vm.used), human(vm.total)))
                 c = psutil.cpu_percent(None)
-                self.bars["cpu"][0]["value"] = c
-                self.bars["cpu"][1].config(text=f"{c:.0f}%")
+                self._set("cpu", c, tr("占用 {0:.0f}%", c))
             else:
-                self.bars["mem"][1].config(text=tr("需要安装 psutil"))
-                self.bars["cpu"][1].config(text=tr("需要安装 psutil"))
+                self._set("mem", None, tr("需要安装 psutil"))
+                self._set("cpu", None, tr("需要安装 psutil"))
             self.after(4000, self.refresh)
 
         def diagnose(self):
             self.app.goto("diag", "findings")
             self.app.tabs["diag"].subtabs["findings"].scan()
+
 
     # ------------------------------------------------------------ 垃圾清理
     class JunkTab(ListTab):
@@ -1021,6 +1075,62 @@ if tk:
                 messagebox.showinfo(tr("完成"), tr("回收站已清空"))
 
     # ------------------------------------------------------------ 大文件
+    class ExcludePanel(ttk.LabelFrame):
+        """“排除”面板：勾选不想扫描的文件类型、用文件夹选择器添加不想扫描的文件夹；设置自动保存，下次打开还在"""
+
+        def __init__(self, parent, page):
+            super().__init__(parent, text=tr("排除（这些不会被扫描）"))
+            self.page = page
+            cfg = core.exclusion_config(page)
+            self.vars = {}
+            row = ttk.Frame(self)
+            row.pack(fill="x", padx=6, pady=(4, 0))
+            ttk.Label(row, text=tr("文件类型：")).pack(side="left")
+            for gid, (name, _exts) in core.FILE_GROUPS.items():
+                v = tk.BooleanVar(value=gid in cfg.get("groups", []))
+                self.vars[gid] = v
+                ttk.Checkbutton(row, text=name, variable=v, command=self.save).pack(side="left", padx=4)
+            row2 = ttk.Frame(self)
+            row2.pack(fill="x", padx=6, pady=2)
+            ttk.Label(row2, text=tr("其他扩展名（如 .psd .ai，用空格隔开）：")).pack(side="left")
+            self.exts = tk.StringVar(value=" ".join(cfg.get("exts", [])))
+            ent = ttk.Entry(row2, textvariable=self.exts, width=24)
+            ent.pack(side="left", padx=4)
+            ent.bind("<FocusOut>", lambda e: self.save())
+            ent.bind("<Return>", lambda e: self.save())
+            row3 = ttk.Frame(self)
+            row3.pack(fill="x", padx=6, pady=(2, 6))
+            ttk.Label(row3, text=tr("文件夹：")).pack(side="left", anchor="n")
+            self.box = tk.Listbox(row3, height=3, width=60, selectmode="extended")
+            self.box.pack(side="left", padx=4, fill="x", expand=True)
+            for f in cfg.get("folders", []):
+                self.box.insert("end", f)
+            bf = ttk.Frame(row3)
+            bf.pack(side="left")
+            ttk.Button(bf, text=tr("添加文件夹…"), command=self.add_folder).pack(fill="x")
+            ttk.Button(bf, text=tr("移除选中"), command=self.remove).pack(fill="x", pady=2)
+
+        def config_dict(self):
+            return dict(groups=[g for g, v in self.vars.items() if v.get()],
+                        exts=self.exts.get().replace(",", " ").split(), folders=list(self.box.get(0, "end")))
+
+        def save(self):
+            core.exclusion_save(self.page, self.config_dict())
+
+        def add_folder(self):
+            d = filedialog.askdirectory(title=tr("选择要排除的文件夹"))
+            if d and d not in list(self.box.get(0, "end")):
+                self.box.insert("end", d)
+                self.save()
+
+        def remove(self):
+            for i in reversed(self.box.curselection()):
+                self.box.delete(i)
+            self.save()
+
+        def get(self):
+            return core.Exclusions.from_config(self.config_dict())
+
     class LargeTab(ListTab):
         def __init__(self, app):
             super().__init__(app, [("size", tr("大小"), 90, "e"), ("age", tr("最后修改"), 90, "e"), ("path", tr("路径"), 700, "w")])
@@ -1036,6 +1146,8 @@ if tk:
             self.btn(tr("全选"), self.select_all)
             self.btn(tr("删除选中"), self.delete)
             self.info.config(text=tr("这些文件无法自动判断是否有用（视频/虚拟机/安装包等），请自行甄别；删除后进回收站。钱包文件已被自动保护、不会出现在列表里。"))
+            self.excl = ExcludePanel(self, "large")
+            self.excl.pack(fill="x", padx=8, pady=(0, 4), after=self.top)
 
         def scan(self):
             root = Path(self.root_var.get())
@@ -1046,17 +1158,18 @@ if tk:
             except ValueError:
                 mb, n = 100, 50
 
-            task = Task()
+            task, ex = Task(), self.excl.get()
 
             def work():
-                return heapq.nlargest(n, core.walk_user_files(root, int(mb * 1048576), task), key=lambda x: x[1])
+                return heapq.nlargest(n, core.walk_user_files(root, int(mb * 1048576), task, ex), key=lambda x: x[1])
 
             def done(res):
                 self.clear()
                 now = time.time()
                 for fp, sz, mt in res:
                     self.add((human(sz), tr("{0} 天前", int((now - mt) / 86400)), fp), (fp, sz))
-                self.info.config(text=tr("共 {0} 个文件，合计 {1}", len(res), human(sum(r[1] for r in res))))
+                self.info.config(text=tr("共 {0} 个文件，合计 {1}", len(res), human(sum(r[1] for r in res)))
+                                 + (("   " + ex.summary()) if ex else ""))
                 self.done_note(task)
 
             self.app.run_bg(work, done, tr("扫描大文件…（目录较大时可能需要几分钟）"), task=task)
@@ -1094,6 +1207,8 @@ if tk:
             self.btn(tr("选中所有副本"), self.select_copies)
             self.btn(tr("删除选中"), self.delete)
             self.info.config(text=tr("灰色“保留”为建议保留的一份（路径最短/最早），只会删除你选中的“副本”。"))
+            self.excl = ExcludePanel(self, "dup")
+            self.excl.pack(fill="x", padx=8, pady=(0, 4), after=self.top)
 
         def scan(self):
             root = Path(self.root_var.get())
@@ -1108,10 +1223,11 @@ if tk:
                     for fp, _ in g[1:]:
                         self.add((gi, human(sz), tr("副本"), fp), dict(path=fp, size=sz, keep=False))
                         waste += sz
-                self.info.config(text=tr("{0} 组重复文件，删除全部副本可释放 {1}", len(groups), human(waste)) if groups else tr("没有发现重复文件"))
+                self.info.config(text=(tr("{0} 组重复文件，删除全部副本可释放 {1}", len(groups), human(waste)) if groups else tr("没有发现重复文件"))
+                                 + (("   " + ex.summary()) if ex else ""))
 
-            task = Task()
-            self.app.run_bg(lambda: find_duplicates(root, 1, task), lambda g: (done(g), self.done_note(task)),
+            task, ex = Task(), self.excl.get()
+            self.app.run_bg(lambda: find_duplicates(root, 1, task, ex), lambda g: (done(g), self.done_note(task)),
                             tr("查找重复文件…（会计算文件哈希，较慢）"), task=task)
 
         def select_copies(self):
@@ -1679,34 +1795,63 @@ if tk:
             self.nb2.select(self.subtabs[key])
 
     # ------------------------------------------------------------ 诊断中心（v0.3.1）
+    class ScoreGauge(tk.Canvas):
+        """健康分仪表盘：一圈灰色底环 + 一段按分数着色的圆弧 + 中间的大数字"""
+
+        def __init__(self, parent, size=112):
+            super().__init__(parent, width=size, height=size, highlightthickness=0, bg=theme.PALETTE["bg"])
+            self.size = size
+            self.set(None)
+
+        def set(self, score):
+            self.delete("all")
+            s, pad, P = self.size, 10, theme.PALETTE
+            self.create_oval(pad, pad, s - pad, s - pad, outline=P["line"], width=10)
+            if score is None:
+                self.create_text(s / 2, s / 2, text="--", font=("", int(s / 4), "bold"), fill="#9ca3af")
+                return
+            color = theme.score_color(score)
+            if score > 0:
+                self.create_arc(pad, pad, s - pad, s - pad, start=90, extent=-3.599 * score, style="arc", outline=color, width=10)
+            self.create_text(s / 2, s / 2 - 6, text=str(score), font=("", int(s / 3.6), "bold"), fill=color)
+            self.create_text(s / 2, s / 2 + s / 5, text=tr("健康分"), fill=P["muted"])
+
     class DiagTab(ttk.Frame):
-        """全面诊断：按“性能 / 存储 / 安全 / 钱包”分组的卡片；每个问题后面是可以直接执行或跳转的按钮"""
-        COLOR = {"crit": "#c62828", "warn": "#e65100", "info": "#1565c0", "ok": "#2e7d32"}
+        """全面诊断：按“性能 / 存储 / 安全 / 加固与更新 / 钱包”分组的卡片；每个问题后面是可以直接执行或跳转的按钮"""
 
         def __init__(self, app, parent):
             super().__init__(parent)
             self.app = app
+            P = theme.PALETTE
             bar = ttk.Frame(self)
-            bar.pack(fill="x", padx=8, pady=6)
-            ttk.Button(bar, text=tr("🔍 开始诊断"), command=self.scan).pack(side="left")
+            bar.pack(fill="x", padx=10, pady=(10, 4))
+            ttk.Button(bar, text=tr("🔍 开始诊断"), style="Accent.TButton", command=self.scan).pack(side="left")
             self.deep = tk.BooleanVar(value=False)
             ttk.Checkbutton(bar, text=tr("深度诊断（较慢：大文件、重复文件、整个主目录的钱包与密钥扫描、深度风险扫描）"),
-                            variable=self.deep).pack(side="left", padx=10)
+                            variable=self.deep).pack(side="left", padx=14)
             self.show_ok = tk.BooleanVar(value=False)
             ttk.Checkbutton(bar, text=tr("显示正常项目"), variable=self.show_ok, command=self.render).pack(side="left")
-            self.score = ttk.Label(self, text="", font=("", 13, "bold"))
-            self.score.pack(anchor="w", padx=12)
+            head = ttk.Frame(self)
+            head.pack(fill="x", padx=10, pady=(4, 2))
+            self.gauge = ScoreGauge(head, 112)
+            self.gauge.pack(side="left")
+            right = ttk.Frame(head)
+            right.pack(side="left", padx=16, anchor="n")
+            self.score = ttk.Label(right, text="", font=("", 14, "bold"))
+            self.score.pack(anchor="w", pady=(14, 6))
+            self.chips = ttk.Frame(right)
+            self.chips.pack(anchor="w")
             self.info = ttk.Label(self, text=tr("只读检查，不会改动系统。点“开始诊断”，每个问题后面会有可以直接执行或跳转到对应页面的按钮。"),
-                                  foreground="#555")
-            self.info.pack(side="bottom", fill="x", padx=8, pady=4)
+                                  style="Muted.TLabel")
+            self.info.pack(side="bottom", fill="x", padx=10, pady=6)
             body = ttk.Frame(self)
-            body.pack(fill="both", expand=True, padx=8)
-            self.canvas = tk.Canvas(body, highlightthickness=0)
+            body.pack(fill="both", expand=True, padx=10)
+            self.canvas = tk.Canvas(body, highlightthickness=0, bg=P["bg"])
             vs = ttk.Scrollbar(body, orient="vertical", command=self.canvas.yview)
             self.canvas.configure(yscrollcommand=vs.set)
             vs.pack(side="right", fill="y")
             self.canvas.pack(side="left", fill="both", expand=True)
-            self.inner = ttk.Frame(self.canvas)
+            self.inner = tk.Frame(self.canvas, bg=P["bg"])
             self.win = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
             self.inner.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
             self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(self.win, width=e.width))
@@ -1739,48 +1884,66 @@ if tk:
             self.app.run_bg(lambda: fd.run_diagnosis(task, deep), done, tr("诊断中…"), task=task)
 
         def render(self):
+            P = theme.PALETTE
             for w in self.inner.winfo_children():
+                w.destroy()
+            for w in self.chips.winfo_children():
                 w.destroy()
             r = self.app.diag
             if not r:
-                ttk.Label(self.inner, text=tr("还没有诊断。点上面的“开始诊断”。"), foreground="#777").pack(anchor="w", padx=8, pady=20)
+                self.gauge.set(None)
+                self.score.config(text="")
+                tk.Label(self.inner, text=tr("还没有诊断。点上面的“开始诊断”。"), fg=P["muted"], bg=P["bg"]).pack(anchor="w", padx=8, pady=24)
                 return
             sc = r["score"]
-            cats = "   ".join(f"{name} {r['cats'][k]}" for k, name in fd.CATEGORIES if k in r["cats"])
-            self.score.config(text=tr("健康分：{0} / 100", sc) + "     " + cats,
-                              foreground="#2e7d32" if sc >= 80 else "#e65100" if sc >= 55 else "#c62828")
+            self.gauge.set(sc)
+            self.score.config(text=tr("健康分：{0} / 100", sc), foreground=theme.score_color(sc))
+            for key, name in fd.CATEGORIES:
+                if key in r["cats"]:
+                    chip = tk.Frame(self.chips, bg=P["card"], highlightthickness=1, highlightbackground=P["line"])
+                    chip.pack(side="left", padx=(0, 8))
+                    tk.Label(chip, text=name, fg=P["muted"], bg=P["card"], padx=10, pady=4).pack(side="left")
+                    tk.Label(chip, text=str(r["cats"][key]), fg=theme.score_color(r["cats"][key]), bg=P["card"],
+                             font=("", 11, "bold"), padx=8).pack(side="left")
             for key, cname in fd.CATEGORIES:
                 allf = [f for f in r["findings"] if f["cat"] == key]
                 if not allf:
                     continue
                 todo = [f for f in allf if f["level"] != fd.LV_OK]
                 head = tr("{0}（{1} 项待处理）", cname, len(todo)) if todo else tr("{0}（正常）", cname)
-                ttk.Label(self.inner, text=head, font=("", 11, "bold")).pack(anchor="w", padx=4, pady=(10, 2))
+                tk.Label(self.inner, text=head, font=("", 11, "bold"), fg=P["text"], bg=P["bg"]).pack(anchor="w", padx=4, pady=(14, 4))
                 rows = allf if self.show_ok.get() else todo
                 if not rows:
-                    ttk.Label(self.inner, text=tr("✓ 没有发现问题"), foreground=self.COLOR["ok"]).pack(anchor="w", padx=18)
+                    tk.Label(self.inner, text=tr("✓ 没有发现问题"), fg=P["ok"], bg=P["bg"]).pack(anchor="w", padx=18)
                 for f in rows:
                     self.card(f)
 
         def card(self, f):
+            P = theme.PALETTE
             lv = {fd.LV_CRIT: "crit", fd.LV_WARN: "warn", fd.LV_INFO: "info", fd.LV_OK: "ok"}[f["level"]]
-            row = ttk.Frame(self.inner)
-            row.pack(fill="x", padx=4, pady=3)
-            row.columnconfigure(1, weight=1)
-            ttk.Label(row, text=f["level"], foreground=self.COLOR[lv], width=6, anchor="center",
-                      font=("", 10, "bold")).grid(row=0, column=0, sticky="n", padx=6, pady=2)
-            txt = ttk.Frame(row)
-            txt.grid(row=0, column=1, sticky="we")
-            ttk.Label(txt, text=f"{f['title']}  ·  {f['detail']}", wraplength=560, justify="left").pack(anchor="w")
+            color = theme.LEVEL_COLOR[lv]
+            card = tk.Frame(self.inner, bg=P["card"], highlightthickness=1, highlightbackground=P["line"])
+            card.pack(fill="x", padx=2, pady=4)
+            tk.Frame(card, width=5, bg=color).pack(side="left", fill="y")                         # 左侧的彩色竖条
+            tk.Label(card, text=f["level"], bg=color, fg="#ffffff", font=("", 9, "bold"), padx=9, pady=2).pack(
+                side="left", anchor="n", padx=(12, 8), pady=12)
+            body = tk.Frame(card, bg=P["card"])
+            body.pack(side="left", fill="x", expand=True, pady=8)
+            tk.Label(body, text=f["title"], font=("", 10, "bold"), fg=P["text"], bg=P["card"], anchor="w",
+                     justify="left").pack(anchor="w")
+            tk.Label(body, text=f["detail"], fg=P["text"], bg=P["card"], anchor="w", justify="left", wraplength=520).pack(anchor="w")
             if f["level"] != fd.LV_OK and f["advice"]:
-                ttk.Label(txt, text=f["advice"], wraplength=560, justify="left", foreground="#777").pack(anchor="w")
-            btns = ttk.Frame(row)
-            btns.grid(row=0, column=2, sticky="ne", padx=6)
+                tk.Label(body, text=f["advice"], fg=P["muted"], bg=P["card"], anchor="w", justify="left", wraplength=520).pack(anchor="w", pady=(2, 0))
+            btns = tk.Frame(card, bg=P["card"])
+            btns.pack(side="right", anchor="n", padx=12, pady=10)
             for a in f["actions"]:
                 if a["done"]:
-                    ttk.Label(btns, text="✓ " + tr("已处理"), foreground=self.COLOR["ok"]).pack(fill="x", pady=1)
+                    tk.Label(btns, text="✓ " + tr("已处理"), fg=P["ok"], bg=P["card"]).pack(fill="x", pady=2)
                 else:
-                    ttk.Button(btns, text=a["label"], command=lambda a=a: self.app.run_action(a)).pack(fill="x", pady=1)
+                    style = "Accent.TButton" if a["op"] != "goto" else "TButton"
+                    if a.get("args", {}).get("danger"):
+                        style = "Danger.TButton"
+                    ttk.Button(btns, text=a["label"], style=style, command=lambda a=a: self.app.run_action(a)).pack(fill="x", pady=2)
 
     class StartupImpactTab(ListTab):
         PAGE = "impact"
@@ -1865,6 +2028,159 @@ if tk:
                 fd.clear_history()
                 self.load()
 
+    class SignatureTab(ListTab):
+        PAGE = "sig"
+
+        def __init__(self, app, parent):
+            super().__init__(app, [("name", tr("程序"), 170, "w"), ("kind", tr("类型"), 80, "center"), ("st", tr("状态"), 110, "w"),
+                                   ("signer", tr("签名者 / 所属软件包"), 170, "w"), ("path", tr("路径"), 460, "w")], parent)
+            self.btn(tr("检查签名"), self.scan)
+            self.deep = tk.BooleanVar(value=False)
+            ttk.Checkbutton(self.top, text=tr("检查所有运行中的程序（较慢）"), variable=self.deep).pack(side="left", padx=6)
+            self.btn(tr("停用选中的启动项"), self.disable_sel)
+            self.btn(tr("结束选中的进程"), self.kill_sel)
+            self.btn(tr("复制 SHA-256"), self.copy_hash)
+            self.btn(tr("打开所在位置"), self.reveal)
+            self.info.config(text=tr("检查开机自启的程序和从用户目录运行的程序有没有可信签名（Linux 上改查“是否属于某个软件包”）。"
+                                     "无签名不等于有害，签名有效也不等于一定安全，请结合来源判断。"))
+
+        def scan(self):
+            task, deep = Task(), self.deep.get()
+
+            def done(rows):
+                self.clear()
+                tag = {"crit": "high", "warn": "mid", "info": "note", "ok": ()}
+                for r in rows:
+                    t = tag[r["risk"]]
+                    self.add((r["name"], tr("启动项") if r["kind"] == "startup" else tr("运行中"), sig.status_text(r["status"]),
+                              r["signer"] or "-", r["path"]), r, (t,) if t else ())
+                bad = sum(1 for r in rows if r["risk"] in ("crit", "warn"))
+                self.info.config(text=tr("检查了 {0} 个程序，其中 {1} 个需要留意。", len(rows), bad))
+                self.done_note(task)
+
+            self.app.run_bg(lambda: sig.scan(task, deep), done, tr("验证程序签名…"), task=task)
+
+        def disable_sel(self):
+            sel = [o for _, o in self.need_selection() or [] if o["kind"] == "startup"]
+            if sel:
+                self.app.tabs["startup"].disable_items([o["item"] for o in sel])
+
+        def kill_sel(self):
+            for _, o in self.need_selection() or []:
+                if o["kind"] == "process" and o["pid"]:
+                    self.app.op_kill_pid({"done": False}, {"pid": o["pid"], "name": o["name"]})
+
+        def copy_hash(self):
+            sel = self.need_selection()
+            if sel:
+                h = sig.sha256_file(sel[0][1]["path"])
+                if h:
+                    self.app.op_copy_text({}, {"text": h, "note": tr("已复制。可以把它粘贴到 VirusTotal 等网站查询这个文件。")})
+                else:
+                    messagebox.showinfo(tr("提示"), tr("读不了这个文件，或者文件太大。"))
+
+        def reveal(self):
+            sel = self.need_selection()
+            if sel:
+                open_location(sel[0][1]["path"])
+
+    class BaselineTab(ListTab):
+        PAGE = "baseline"
+
+        def __init__(self, app, parent):
+            super().__init__(app, [("cat", tr("类别"), 150, "w"), ("chg", tr("变化"), 70, "center"), ("what", tr("内容"), 760, "w")], parent)
+            self.btn(tr("设为基线"), lambda: self.set_baseline())
+            self.btn(tr("对比当前"), self.compare)
+            self.btn(tr("接受当前为新基线"), lambda: self.accept())
+            self.refresh_info()
+
+        def refresh_info(self):
+            b = bl.load()
+            self.info.config(text=tr("基线建立于 {0:%Y-%m-%d %H:%M}。点“对比当前”看多了什么、少了什么。", datetime.datetime.fromtimestamp(b["ts"]))
+                             if b else tr("还没有建立基线。确认电脑目前是干净的，点“设为基线”；以后只会提醒你“多了什么”。"))
+
+        def set_baseline(self, then=None):
+            if bl.load() and not messagebox.askyesno(tr("确认"), tr("已经有基线了，要用现在的状态覆盖它吗？")):
+                return
+
+            def done(_r):
+                self.refresh_info()
+                messagebox.showinfo(tr("完成"), tr("基线已建立。"))
+                if then:
+                    then()
+                self.clear()
+
+            self.app.run_bg(bl.save, done, tr("记录当前状态…"))
+
+        def accept(self, then=None):
+            if not messagebox.askyesno(tr("确认"), tr("把当前状态接受为新基线？（说明这些变化是你自己做的）")):
+                return
+
+            def done(_r):
+                self.refresh_info()
+                if then:
+                    then()
+                self.clear()
+
+            self.app.run_bg(bl.save, done, tr("记录当前状态…"))
+
+        def compare(self):
+            def done(res):
+                self.clear()
+                if res is None:
+                    return self.refresh_info()
+                n = 0
+                for key, name in bl.CATS:
+                    e = res["diff"].get(key)
+                    if not e:
+                        continue
+                    for x in e["added"]:
+                        self.add((name, tr("新增"), bl.pretty(key, x)), (key, "added", x), ("high",) if key in ("admins", "ssh_keys") else ("mid",))
+                        n += 1
+                    for x in e["removed"]:
+                        self.add((name, tr("消失"), bl.pretty(key, x)), (key, "removed", x), ("keep",))
+                self.info.config(text=tr("和基线相比有 {0} 处新增。", n) if n else tr("和基线相比没有新增的东西。"))
+
+            self.app.run_bg(bl.compare, done, tr("对比基线…"))
+
+    class HardenTab(ListTab):
+        PAGE = "harden"
+
+        def __init__(self, app, parent):
+            super().__init__(app, [("lv", tr("状态"), 70, "center"), ("title", tr("检查项"), 200, "w"),
+                                   ("detail", tr("现状"), 300, "w"), ("advice", tr("建议"), 400, "w")], parent)
+            self.btn(tr("检查"), self.scan)
+            self.deep = tk.BooleanVar(value=False)
+            ttk.Checkbutton(self.top, text=tr("包含联网检查（待安装的系统更新，较慢）"), variable=self.deep).pack(side="left", padx=6)
+            self.btn(tr("执行选中项的修复"), self.fix)
+            self.info.config(text=tr("检查系统更新、磁盘加密、远程登录、自动登录、屏幕锁、备份、对外开放的高风险端口等。"
+                                     "需要管理员权限的修改，Faster 不会替你做：会打开对应的系统设置，或给出可复制的命令。"))
+
+        def scan(self):
+            task, deep = Task(), self.deep.get()
+
+            def done(F):
+                self.clear()
+                tag = {fd.LV_CRIT: "high", fd.LV_WARN: "mid", fd.LV_INFO: "note", fd.LV_OK: "keep"}
+                for f in sorted(F, key=lambda f: fd._LV_ORDER[f["level"]]):
+                    self.add((f["level"], f["title"], f["detail"], f["advice"]), f, (tag[f["level"]],))
+                n = sum(1 for f in F if f["level"] in (fd.LV_CRIT, fd.LV_WARN))
+                self.info.config(text=tr("{0} 项需要处理。选中一行点“执行选中项的修复”。", n))
+                self.done_note(task)
+
+            self.app.run_bg(lambda: fd.harden_findings(task, deep), done, tr("检查中…"), task=task)
+
+        def fix(self):
+            sel = self.need_selection()
+            if not sel:
+                return
+            f = sel[0][1]
+            acts = [a for a in f["actions"] if a["op"] in ("open_settings", "copy_text")]
+            if acts:
+                self.app.run_action(acts[0])
+            else:
+                messagebox.showinfo(tr("建议"), f["advice"] or f["detail"])
+
     class DiagHub(ttk.Frame):
         def __init__(self, app):
             super().__init__(app.nb)
@@ -1873,7 +2189,8 @@ if tk:
             self.nb2.pack(fill="both", expand=True, padx=4, pady=4)
             self.subtabs = {}
             for key, title, cls in (("findings", tr("全面诊断"), DiagTab), ("impact", tr("启动影响"), StartupImpactTab),
-                                    ("compare", tr("前后对比"), CompareTab)):
+                                    ("sig", tr("程序签名"), SignatureTab), ("baseline", tr("基线对比"), BaselineTab),
+                                    ("harden", tr("加固与更新"), HardenTab), ("compare", tr("前后对比"), CompareTab)):
                 w = cls(app, self.nb2)
                 self.nb2.add(w, text=title)
                 self.subtabs[key] = w
@@ -2114,12 +2431,9 @@ if tk:
         def __init__(self):
             super().__init__()
             self.title(f"Faster v{__version__}" + (tr("  [管理员]") if core.is_admin() else ""))
-            self.geometry("1040x700")
-            self.minsize(880, 560)
-            try:
-                ttk.Style(self).theme_use("vista" if IS_WIN else "aqua" if IS_MAC else "clam")
-            except tk.TclError:
-                pass
+            self.geometry("1120x740")
+            self.minsize(920, 600)
+            theme.apply(self)                           # 统一的配色 / 字体 / 控件样式（失败会静默退回默认外观）
             self.q, self.busy_n = queue.Queue(), 0
             self.cur_task, self.cur_msg, self.tabs = None, "", {}
             self.diag, self.views = None, []           # 最近一次诊断结果；需要在诊断/动作后刷新的视图
@@ -2215,18 +2529,25 @@ if tk:
                 messagebox.showinfo(tr("完成"), tr("已永久删除，释放 {0}", human(freed)))
 
         def op_open_settings(self, a, args):
-            what = args["what"]
-            cmds = {"defender": ["cmd", "/c", "start", "", "windowsdefender:"], "firewall": ["control", "firewall.cpl"],
-                    "power": ["control", "powercfg.cpl"] if IS_WIN else ["open", "x-apple.systempreferences:com.apple.preference.battery"] if IS_MAC else None,
-                    "mac_security": ["open", "x-apple.systempreferences:com.apple.preference.security"]}
-            cmd = cmds.get(what)
-            if not cmd or (IS_WIN and cmd[0] == "open") or (IS_MAC and cmd[0] in ("cmd", "control")) or (IS_LINUX and cmd[0] != "xdg-open"):
+            cmd = settings_command(args["what"])
+            if not cmd:
                 messagebox.showinfo(tr("提示"), tr("这个系统没有对应的设置页面，请在系统设置里手动查找。"))
                 return
             try:
                 subprocess.Popen(cmd, creationflags=0x08000000 if IS_WIN else 0)
             except Exception as e:
                 messagebox.showwarning(tr("提示"), str(e))
+
+        def op_copy_text(self, a, args):
+            self.clipboard_clear()
+            self.clipboard_append(args["text"])
+            messagebox.showinfo(tr("已复制"), args.get("note") or tr("已复制到剪贴板。"))
+
+        def op_set_baseline(self, a, args):
+            self.tabs["diag"].subtabs["baseline"].set_baseline(then=lambda: self.mark_done(a))
+
+        def op_accept_baseline(self, a, args):
+            self.tabs["diag"].subtabs["baseline"].accept(then=lambda: self.mark_done(a))
 
         def op_disable_startup(self, a, args):
             self.tabs["startup"].disable_items(args["items"], then=lambda: self.mark_done(a))

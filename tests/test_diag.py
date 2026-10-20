@@ -399,9 +399,9 @@ class FullRun(unittest.TestCase):
                 "print(json.dumps([sorted({f['cat'] for f in q['findings']}), q['deep'], d['deep'],\n"
                 "                  len(d['findings']) > len(q['findings']), 0 <= q['score'] <= 100, sorted(q['cats'])]))", h)
             cats, qd, dd, more, ok, scored = json.loads(out.splitlines()[-1])
-            self.assertEqual(cats, ["perf", "security", "storage", "wallet"])
+            self.assertEqual(cats, ["harden", "perf", "security", "storage", "wallet"])
             self.assertEqual((qd, dd, more, ok), (False, True, True, True))
-            self.assertEqual(scored, ["perf", "security", "storage", "wallet"])
+            self.assertEqual(scored, ["harden", "perf", "security", "storage", "wallet"])
 
     def test_cancelled_run_returns_partial_results(self):
         t = Task()

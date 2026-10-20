@@ -1,12 +1,12 @@
-# Faster v0.3.1 · Usage & build guide
+# Faster v0.4.0 · Usage & build guide
 
 [中文](README.md) | **English**
 
 Faster is a cross-platform (Windows / macOS / Linux) PC cleaner and wallet-safety helper: it frees disk space, speeds up your computer, scans for risks, and protects crypto wallets. It has a GUI, a CLI, and scheduled auto-cleaning.
 
 Deliverables:
-- Windows: `Faster-0.3.1.exe` (single file, double-click to run)
-- macOS: `Faster-0.3.1.dmg` (open it and drag Faster into “Applications”)
+- Windows: `Faster-0.4.0.exe` (single file, double-click to run)
+- macOS: `Faster-0.4.0.dmg` (open it and drag Faster into “Applications”)
 
 PyInstaller cannot cross-compile — **build the Windows version on Windows and the Mac version on a Mac**. Pick either way:
 
@@ -37,8 +37,8 @@ PyInstaller cannot cross-compile — **build the Windows version on Windows and 
 - Change the version only in `__version__` at the top of `faster.py`; the window title, `--version`, the dmg/exe file names and the Mac app info follow automatically.
 - To release a new version, commit and push a tag; GitHub then builds and publishes automatically (for the current version):
   ```
-  git add . && git commit -m "v0.3.1"
-  git tag v0.3.1 && git push origin main v0.3.1
+  git add . && git commit -m "v0.4.0"
+  git tag v0.4.0 && git push origin main v0.4.0
   ```
 - Changes for every version are recorded in `CHANGELOG.md`.
 
@@ -72,7 +72,20 @@ When running from source, you are asked before scanning whether to download it (
 
 **Important**: Faster will never ask you for a mnemonic or private key. If a scan finds a plaintext mnemonic/private key, the safest course is to move your assets to a freshly generated wallet, write the new mnemonic on paper and keep it offline, then delete or encrypt the old plaintext files. “Delete” on an SSD does not guarantee the data cannot be recovered.
 
-## Diagnosis center: one click, then fix with buttons (v0.3.1)
+## v0.4 Updates & hardening, program signatures, baseline, exclusions, new look
+All of these checks live under “Diagnosis”: “One-click diagnosis” runs them together, and the sub-tabs of the “Diagnosis” tab let you look at and handle each one on its own.
+
+**Hardening & updates** (sub-tab): lists system updates, disk encryption, remote login, auto login, screen lock, backups, high-risk open ports and more. Select a row and click “Fix the selected item”: Faster **opens the matching system settings** or gives you a **command to copy**. Changes that need administrator rights (for example turning SMBv1 off) are never made for you. Tick “Include online checks” to ask the system's update service which updates are still not installed (slower).
+
+**Program signatures** (sub-tab): checks whether programs that start automatically, and programs running from user folders, carry a trusted signature (Windows: Authenticode; macOS: codesign, ad-hoc signatures count as unsigned; Linux has no general signing, so it checks whether the file belongs to an installed package). You can disable a startup item, end a process, or copy a file's SHA-256 (paste it into a site such as VirusTotal). Unsigned does not mean harmful and a valid signature does not guarantee safety; judge by where the program came from.
+
+**Baseline comparison** (sub-tab): when you are sure the computer is clean, click “Set as baseline” (it records startup items, scheduled tasks, externally listening ports, hosts entries, administrator accounts, SSH authorized keys and installed programs). From then on you are only told **what is new**; a new administrator account or SSH key is flagged “Critical”. If you installed something yourself, click “Accept current state as new baseline”.
+
+**Exclusions** (top of the “Large files” and “Duplicates” tabs): tick the **file types** you do not want scanned (video, images, audio, documents, archives, disk images / virtual machines, or add other extensions such as `.psd`) and use the **folder picker** to add **folders** you do not want scanned (subfolders included). Each page keeps its own settings, saved for next time; the deep diagnosis honours them too.
+
+**New look**: consistent colors and fonts, a banner and resource cards on the Overview tab, a health-score gauge and colored cards on the Diagnosis tab, zebra-striped tables and highlighted primary buttons. If the styling cannot be applied it silently falls back to the system default look and everything still works; macOS keeps its native controls.
+
+## Diagnosis center: one click, then fix with buttons (v0.4.0)
 **How to use**: on the Overview tab click **🔍 One-click diagnosis** (or open the “Diagnosis” tab and click “Start diagnosis”). It is read-only and changes nothing; a quick diagnosis takes about 10–30 seconds and can be cancelled any time with the “Cancel” button at the bottom.
 
 **Four categories are checked**
@@ -80,7 +93,8 @@ When running from source, you are asked before scanning whether to download it (
 |---|---|
 | Performance | Memory, swap, CPU, number of startup items, uptime, Windows power plan |
 | Storage | Free disk space, reclaimable junk, Recycle Bin size; (deep) large files, duplicate files |
-| Security | System protection (firewall / Defender / Gatekeeper / SIP), suspicious startup items, mining trojans, modified hosts file; (deep) processes and ports, scheduled tasks, executables in temp folders |
+| Security | System protection (firewall / Defender / Gatekeeper / SIP), suspicious startup items, mining trojans, modified hosts file, **program signatures** (do auto-start programs and programs running from user folders carry a trusted signature?), **baseline comparison** (what is new compared with the “clean state” you recorded); (deep) processes and ports, scheduled tasks, executables in temp folders |
+| Hardening & updates | **System updates** (Windows patch age / restart pending; macOS automatic-update switches; Linux upgradable packages and security updates), software that is no longer maintained (Flash, QuickTime, Python 2, Java 6/7…), **security hardening** (disk encryption, auto login, Remote Desktop / SSH, UAC, SMBv1, screen lock, backups, high-risk open ports); (deep, online) which updates are still not installed |
 | Wallet | Wallet files and plaintext mnemonics/private keys in cloud-synced folders, whether the BIP39 word list is ready; (deep) wallet files and plaintext keys in your whole home folder |
 
 **Reading the result**: at the top you see the overall **health score** and one score per category (starts at 100; −25 per “Critical”, −10 per “Warning”; “Info” costs nothing). Every problem is a card: level (Critical / Warning / Info / Good), current state, advice, and **action buttons** on the right. Only problems are shown by default; tick “Show items that are fine” to see everything.

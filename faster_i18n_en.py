@@ -1482,4 +1482,374 @@ CATALOG = {
         "Make sure the mnemonic is backed up offline.",
     "查看重复文件":
         "View duplicate files",
+    "视频":
+        "Video",
+    "图片":
+        "Images",
+    "音频":
+        "Audio",
+    "文档":
+        "Documents",
+    "压缩包":
+        "Archives",
+    "磁盘镜像 / 虚拟机":
+        "Disk images / virtual machines",
+    "已排除：{0}":
+        "Excluded: {0}",
+    "{0} 个文件夹":
+        "{0} folders",
+    "检查签名":
+        "Check signatures",
+    "停用选中的启动项":
+        "Disable selected startup items",
+    "结束选中的进程":
+        "End selected processes",
+    "复制 SHA-256":
+        "Copy SHA-256",
+    "验证程序签名…":
+        "Verifying program signatures...",
+    "设为基线":
+        "Set as baseline",
+    "对比当前":
+        "Compare with now",
+    "接受当前为新基线":
+        "Accept current state as new baseline",
+    "记录当前状态…":
+        "Recording the current state...",
+    "对比基线…":
+        "Comparing with the baseline...",
+    "检查":
+        "Check",
+    "执行选中项的修复":
+        "Fix the selected item",
+    "检查中…":
+        "Checking...",
+    "排除（这些不会被扫描）":
+        "Exclude (these will not be scanned)",
+    "选择要排除的文件夹":
+        "Choose a folder to exclude",
+    "检查开机自启的程序和从用户目录运行的程序有没有可信签名（Linux 上改查“是否属于某个软件包”）。无签名不等于有害，签名有效也不等于一定安全，请结合来源判断。":
+        "Checks whether programs that start automatically, and programs running from user folders, carry a trusted signature (on Linux it checks whether the file belongs to an installed package). Unsigned does not mean harmful and a valid signature does not guarantee safety; judge by where the program came from.",
+    "基线已建立。":
+        "Baseline created.",
+    "把当前状态接受为新基线？（说明这些变化是你自己做的）":
+        "Accept the current state as the new baseline? (This says the changes were made by you.)",
+    "检查系统更新、磁盘加密、远程登录、自动登录、屏幕锁、备份、对外开放的高风险端口等。需要管理员权限的修改，Faster 不会替你做：会打开对应的系统设置，或给出可复制的命令。":
+        "Checks system updates, disk encryption, remote login, auto login, screen lock, backups, high-risk open ports and more. Faster never makes changes that need administrator rights for you: it opens the matching system settings or gives you a command to copy.",
+    "程序签名":
+        "Program signatures",
+    "基线对比":
+        "Baseline",
+    "加固与更新":
+        "Hardening & updates",
+    "已复制到剪贴板。":
+        "Copied to the clipboard.",
+    "程序":
+        "Program",
+    "签名者 / 所属软件包":
+        "Signer / owning package",
+    "检查了 {0} 个程序，其中 {1} 个需要留意。":
+        "Checked {0} programs; {1} need attention.",
+    "读不了这个文件，或者文件太大。":
+        "Cannot read this file, or it is too large.",
+    "类别":
+        "Category",
+    "变化":
+        "Change",
+    "内容":
+        "Content",
+    "基线建立于 {0:%Y-%m-%d %H:%M}。点“对比当前”看多了什么、少了什么。":
+        "Baseline created on {0:%Y-%m-%d %H:%M}. Click “Compare with now” to see what was added or removed.",
+    "还没有建立基线。确认电脑目前是干净的，点“设为基线”；以后只会提醒你“多了什么”。":
+        "No baseline yet. When you are sure the computer is clean, click “Set as baseline”; from then on you are only told what is new.",
+    "已经有基线了，要用现在的状态覆盖它吗？":
+        "A baseline already exists. Overwrite it with the current state?",
+    "检查项":
+        "Check",
+    "现状":
+        "Current state",
+    "{0} 项需要处理。选中一行点“执行选中项的修复”。":
+        "{0} items need attention. Select a row and click “Fix the selected item”.",
+    "文件类型：":
+        "File types: ",
+    "其他扩展名（如 .psd .ai，用空格隔开）：":
+        "Other extensions (such as .psd .ai, separated by spaces): ",
+    "文件夹：":
+        "Folders: ",
+    "移除选中":
+        "Remove selected",
+    "检查所有运行中的程序（较慢）":
+        "Check all running programs (slower)",
+    "已复制。可以把它粘贴到 VirusTotal 等网站查询这个文件。":
+        "Copied. You can paste it into a site such as VirusTotal to look this file up.",
+    "和基线相比有 {0} 处新增。":
+        "{0} new items compared with the baseline.",
+    "和基线相比没有新增的东西。":
+        "Nothing new compared with the baseline.",
+    "包含联网检查（待安装的系统更新，较慢）":
+        "Include online checks (pending system updates, slower)",
+    "新增":
+        "Added",
+    "消失":
+        "Removed",
+    "打开 Windows 更新":
+        "Open Windows Update",
+    "打开远程桌面设置":
+        "Open Remote Desktop settings",
+    "打开 BitLocker 设置":
+        "Open BitLocker settings",
+    "打开“软件更新”":
+        "Open “Software Update”",
+    "打开 FileVault 设置":
+        "Open FileVault settings",
+    "打开“用户与群组”":
+        "Open “Users & Groups”",
+    "打开“共享”设置":
+        "Open “Sharing” settings",
+    "打开 Time Machine 设置":
+        "Open Time Machine settings",
+    "复制修复命令":
+        "Copy the fix command",
+    "正在检查：系统更新":
+        "Checking: system updates",
+    "正在检查：安全加固":
+        "Checking: security hardening",
+    "程序签名与基线":
+        "Program signatures & baseline",
+    "到程序签名页查看":
+        "See it on the Program signatures tab",
+    "如果不是你安装的软件，请停用或结束它；也可以复制文件的 SHA-256 去 VirusTotal 查询。":
+        "If you did not install this software, disable or end it; you can also copy the file's SHA-256 and look it up on VirusTotal.",
+    "来源可疑的程序":
+        "Program from a dubious source",
+    "到“程序签名”页逐个确认。":
+        "Review them one by one on the “Program signatures” tab.",
+    "检查了 {0} 个程序，没有发现签名问题":
+        "Checked {0} programs; no signature problems found",
+    "还没有建立基线":
+        "No baseline yet",
+    "在你确认电脑目前干净的时候，把现在的状态记为基线；以后只提醒你“多了什么”。":
+        "When you are sure the computer is clean, record its current state as the baseline; from then on you are only told what is new.",
+    "这些是我自己装的（接受为新基线）":
+        "I installed these myself (accept as new baseline)",
+    "查看变化":
+        "View changes",
+    "{0}有新增":
+        "New {0}",
+    "新增 {0} 项：{1}":
+        "{0} new: {1}",
+    "和基线相比多出来的东西。如果不是你做的，请重点核查。":
+        "These appeared since the baseline. If you did not do it, check them carefully.",
+    "和基线相比，没有新增的启动项、计划任务、端口、管理员账户":
+        "Nothing new compared with the baseline: startup items, scheduled tasks, ports, administrator accounts",
+    "命令已复制。请在终端 / 管理员 PowerShell 里粘贴运行。":
+        "Command copied. Paste it into a terminal / administrator PowerShell and run it.",
+    "签名被破坏的程序":
+        "Program with a broken signature",
+    "到卸载页处理":
+        "Handle it on the Uninstall tab",
+    "把现在的状态设为基线":
+        "Set the current state as the baseline",
+    "到基线页查看":
+        "See it on the Baseline tab",
+    "停用这些启动项":
+        "Disable these startup items",
+    "查看加固清单":
+        "View the hardening checklist",
+    "已验证":
+        "Verified",
+    "签名有效":
+        "Signature valid",
+    "无签名":
+        "Unsigned",
+    "不属于任何软件包":
+        "Not owned by any package",
+    "正在验证 {0} 个程序的签名…":
+        "Verifying the signatures of {0} programs...",
+    "签名无效":
+        "Signature invalid",
+    "文件不存在":
+        "File missing",
+    "无法判断":
+        "Cannot tell",
+    "计划任务":
+        "Scheduled tasks",
+    "对外监听端口":
+        "Externally listening ports",
+    "hosts 条目":
+        "hosts entries",
+    "管理员账户":
+        "Administrator accounts",
+    "SSH 授权密钥":
+        "SSH authorized keys",
+    "已安装程序":
+        "Installed programs",
+    "已停止维护的软件":
+        "Software that is no longer maintained",
+    "发现：{0}":
+        "Found: {0}",
+    "这些软件不再收到安全更新，建议卸载或换成新版。":
+        "This software no longer receives security updates; uninstall it or switch to a newer version.",
+    "系统更新":
+        "System updates",
+    "读不到补丁安装记录":
+        "Cannot read the patch installation history",
+    "打开 Windows 更新，手动检查一下。":
+        "Open Windows Update and check by hand.",
+    "最近一次补丁安装在 {0} 天前":
+        "The last patch was installed {0} days ago",
+    "很久没装补丁了：打开 Windows 更新，检查并安装更新。":
+        "It has been a long time since the last patch: open Windows Update and install the updates.",
+    "需要重启":
+        "Restart needed",
+    "更新已经安装，重启后才生效":
+        "Updates are installed and only take effect after a restart",
+    "保存好工作后重启电脑。":
+        "Save your work, then restart the computer.",
+    "待安装的更新":
+        "Pending updates",
+    "没能连上更新服务":
+        "Could not reach the update service",
+    "检查网络，或直接打开 Windows 更新。":
+        "Check your network, or open Windows Update directly.",
+    "自动检查更新已关闭":
+        "Automatic update checking is off",
+    "到“软件更新”里打开自动检查，安全更新才能及时装上。":
+        "Turn on automatic checking in “Software Update” so security updates are installed in time.",
+    "有 {0} 个更新没装：{1}":
+        "{0} updates are not installed: {1}",
+    "到 Windows 更新里安装。":
+        "Install them in Windows Update.",
+    "没有待安装的更新":
+        "No pending updates",
+    "没有开启“自动安装安全响应和系统文件”":
+        "“Install security responses and system files automatically” is off",
+    "建议在“软件更新”的高级选项里打开。":
+        "Turn it on in the advanced options of “Software Update”.",
+    "自动更新已开启":
+        "Automatic updates are on",
+    "没能查询更新":
+        "Could not query updates",
+    "打开“软件更新”手动检查。":
+        "Open “Software Update” and check by hand.",
+    "有 {0} 个软件包可更新，其中 {1} 个是安全更新":
+        "{0} packages can be updated, {1} of them security updates",
+    "尽快更新：复制命令，在终端里运行。":
+        "Update soon: copy the command and run it in a terminal.",
+    "软件包索引":
+        "Package index",
+    "已经 {0:.0f} 天没刷新":
+        "Not refreshed for {0:.0f} days",
+    "先刷新索引才能看到最新的更新。":
+        "Refresh the index first to see the latest updates.",
+    "有 {0} 个软件包可更新":
+        "{0} packages can be updated",
+    "复制命令，在终端里运行。":
+        "Copy the command and run it in a terminal.",
+    "到“软件更新”里安装。":
+        "Install them in “Software Update”.",
+    "已是最新（以本机的软件包索引为准）":
+        "Up to date (according to this machine's package index)",
+    "远程桌面":
+        "Remote Desktop",
+    "VNC / 屏幕共享":
+        "VNC / screen sharing",
+    "用户账户控制（UAC）":
+        "User Account Control (UAC)",
+    "已关闭":
+        "Turned off",
+    "UAC 是拦截程序偷偷提权的第一道门，建议开启。":
+        "UAC is the first gate that stops programs from elevating themselves silently; turn it on.",
+    "自动登录":
+        "Automatic login",
+    "开机不用输密码就进入系统":
+        "The system is entered at startup without a password",
+    "别人拿到电脑就能直接用，建议关闭自动登录。":
+        "Anyone who gets the computer can use it directly; turn automatic login off.",
+    "已开启":
+        "Turned on",
+    "不需要远程控制本机就关掉；要用请设置强密码并只在可信网络使用。":
+        "Turn it off if you don't need to control this computer remotely; if you do, set a strong password and use it only on trusted networks.",
+    "SMBv1 协议":
+        "SMBv1 protocol",
+    "SMBv1 有严重的已知漏洞（勒索病毒常用）。以管理员身份打开 PowerShell 运行命令关闭它。":
+        "SMBv1 has serious known vulnerabilities (favoured by ransomware). Open PowerShell as administrator and run the command to turn it off.",
+    "安全启动（Secure Boot）":
+        "Secure Boot",
+    "未开启":
+        "Not turned on",
+    "可在 BIOS/UEFI 里开启，能防止启动阶段被植入恶意程序。":
+        "Turn it on in the BIOS/UEFI; it stops malware from being planted during startup.",
+    "磁盘加密（BitLocker）":
+        "Disk encryption (BitLocker)",
+    "系统盘已加密":
+        "The system drive is encrypted",
+    "磁盘加密（FileVault）":
+        "Disk encryption (FileVault)",
+    "访客账户":
+        "Guest account",
+    "不需要就关掉。":
+        "Turn it off if you don't need it.",
+    "屏幕锁":
+        "Screen lock",
+    "唤醒屏幕时不要求输入密码":
+        "No password is required when the screen wakes up",
+    "建议开启：离开座位时别人无法直接使用。":
+        "Turn it on: others cannot use the computer directly when you step away.",
+    "备份（Time Machine）":
+        "Backup (Time Machine)",
+    "没有配置备份":
+        "No backup configured",
+    "硬盘坏了、被勒索病毒加密时，备份是唯一的退路。":
+        "A backup is the only way back when the disk fails or ransomware encrypts your files.",
+    "对外开放的高风险端口":
+        "High-risk ports open to the network",
+    "这些服务对整个局域网/互联网开放。不需要就关闭对应的服务；要用请设置强密码。":
+        "These services are open to the whole LAN/Internet. Turn off the matching service if you don't need it; if you do, set a strong password.",
+    "系统盘没有加密":
+        "The system drive is not encrypted",
+    "电脑丢失或被拆硬盘时，里面的数据可以被直接读取。家庭版 Windows 可能不支持 BitLocker，可看“设备加密”。":
+        "If the computer is lost or its disk is removed, the data can be read directly. Windows Home may not support BitLocker; look for “Device encryption”.",
+    "没有开启":
+        "Not turned on",
+    "电脑丢失时里面的数据可以被直接读取，建议开启。":
+        "If the computer is lost, the data can be read directly; turn it on.",
+    "已配置备份":
+        "Backup configured",
+    "磁盘加密":
+        "Disk encryption",
+    "检测到加密卷":
+        "Encrypted volumes found",
+    "没有检测到全盘加密（LUKS）":
+        "No full-disk encryption (LUKS) detected",
+    "新装系统时建议启用磁盘加密；已安装的系统很难事后补加。":
+        "Enable disk encryption when installing the system; it is hard to add afterwards.",
+    "SSH 服务":
+        "SSH service",
+    "允许 root 直接登录":
+        "Root login is allowed",
+    "在 /etc/ssh/sshd_config 里把 PermitRootLogin 改成 no，然后重启 sshd。":
+        "Change PermitRootLogin to no in /etc/ssh/sshd_config, then restart sshd.",
+    "自动安全更新":
+        "Automatic security updates",
+    "开启后安全补丁会自动安装。复制命令，在终端里运行。":
+        "Once on, security patches install themselves. Copy the command and run it in a terminal.",
+    "屏幕保护时不要求输入密码":
+        "No password is required after the screen saver",
+    "可在 BIOS/UEFI 里开启。":
+        "Turn it on in the BIOS/UEFI.",
+    "安全加固":
+        "Security hardening",
+    "允许用密码登录":
+        "Password login is allowed",
+    "改用密钥登录更安全：把 PasswordAuthentication 改成 no。":
+        "Key-based login is safer: change PasswordAuthentication to no.",
+    "正在运行（端口 22）":
+        "Running (port 22)",
+    "不需要远程登录的话请停用它。":
+        "Stop it if you don't need remote login.",
+    "健康分":
+        "Health score",
+    "让电脑更快、更安全":
+        "Faster, safer computing",
 }

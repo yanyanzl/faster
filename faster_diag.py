@@ -24,6 +24,10 @@ except ImportError:
 
 import faster as core
 import faster_crypto as fc
+import faster_sig as sig
+import faster_baseline as bl
+import faster_patch as patch
+import faster_harden as harden
 from faster_i18n import tr
 
 HOME, APP_DIR, human = core.HOME, core.APP_DIR, core.human
@@ -33,7 +37,7 @@ GB = 1024 ** 3
 
 LV_CRIT, LV_WARN, LV_INFO, LV_OK = tr("严重"), tr("注意"), tr("提示"), tr("良好")
 _LV_ORDER = {LV_CRIT: 0, LV_WARN: 1, LV_INFO: 2, LV_OK: 3}
-CATEGORIES = (("perf", tr("性能")), ("storage", tr("存储")), ("security", tr("安全")), ("wallet", tr("钱包")))
+CATEGORIES = (("perf", tr("性能")), ("storage", tr("存储")), ("security", tr("安全")), ("harden", tr("加固与更新")), ("wallet", tr("钱包")))
 
 
 # ============================================================ 状态快照 / 前后对比
@@ -302,7 +306,7 @@ def storage_findings(task=None, deep=False):
     if deep:
         if task is not None and not task.tick(tr("正在查找大文件…")):
             return F
-        big = list(core.walk_user_files(HOME, 500 * MB, task))
+        big = list(core.walk_user_files(HOME, 500 * MB, task, core.exclusions_for("large")))
         if big:
             big.sort(key=lambda x: -x[1])
             F.append(_f("bigfiles", "storage", LV_WARN, tr("大文件"),
@@ -313,7 +317,7 @@ def storage_findings(task=None, deep=False):
         else:
             F.append(_f("bigfiles", "storage", LV_OK, tr("大文件"), tr("没有超过 500MB 的文件"), ""))
         if task is None or task.tick(tr("正在查找重复文件…（较慢）")):
-            groups = core.find_duplicates(HOME, 5, task)
+            groups = core.find_duplicates(HOME, 5, task, core.exclusions_for("dup"))
             waste = sum(sz * (len(g) - 1) for sz, g in groups)
             if groups and waste >= 500 * MB:
                 F.append(_f("dups", "storage", LV_WARN, tr("重复文件"), tr("发现 {0} 组重复文件，约浪费 {1}", len(groups), human(waste)),
@@ -327,8 +331,15 @@ def storage_findings(task=None, deep=False):
 # ---------------------------------------------------------------- 安全
 _SETTINGS_FOR = {"defender_rt": "defender", "defender_old": "defender", "firewall": "firewall",
                  "gatekeeper": "mac_security", "sip": "mac_security", "mac_fw": "mac_security"}
-_SETTINGS_LABEL = {"defender": lambda: tr("打开 Windows 安全中心"), "firewall": lambda: tr("打开防火墙设置"),
-                   "mac_security": lambda: tr("打开“隐私与安全性”")}
+SETTINGS_LABEL = {
+    "defender": lambda: tr("打开 Windows 安全中心"), "firewall": lambda: tr("打开防火墙设置"),
+    "mac_security": lambda: tr("打开“隐私与安全性”"), "windows_update": lambda: tr("打开 Windows 更新"),
+    "remote_desktop": lambda: tr("打开远程桌面设置"), "bitlocker": lambda: tr("打开 BitLocker 设置"),
+    "mac_update": lambda: tr("打开“软件更新”"), "mac_filevault": lambda: tr("打开 FileVault 设置"),
+    "mac_users": lambda: tr("打开“用户与群组”"), "mac_sharing": lambda: tr("打开“共享”设置"),
+    "mac_backup": lambda: tr("打开 Time Machine 设置"), "power": lambda: tr("打开电源设置"),
+}
+_SETTINGS_LABEL = SETTINGS_LABEL
 
 
 def security_findings(task=None, deep=False):
@@ -385,6 +396,97 @@ def security_findings(task=None, deep=False):
         lv = LV_CRIT if hi else LV_WARN if mid else LV_OK
         F.append(_f("deepscan", "security", lv, tr("深度风险扫描"), tr("高危 {0} · 中危 {1} · 提示 {2}", hi, mid, info),
                     tr("到“风险扫描”页查看每一项的详情。"), [goto(tr("查看详情"), "security", auto="scan")]))
+    return F
+
+
+# ---------------------------------------------------------------- 程序签名 + 基线（安全）
+def trust_findings(task=None, deep=False):
+    F = []
+    rows = sig.scan(task, deep)
+    probs = [r for r in rows if r["risk"] in ("crit", "warn")]
+    for r in probs[:8]:
+        acts = []
+        if r["kind"] == "startup":
+            acts.append(act("disable_startup", tr("停用"), page="sig", items=[r["item"]]))
+        elif r["pid"] and _killable(r["name"], r["pid"]):
+            acts.append(act("kill_pid", tr("结束 {0}", r["name"]), page="sig", pid=r["pid"], name=r["name"], danger=True))
+        h = sig.sha256_file(r["path"])
+        if h:
+            acts.append(act("copy_text", tr("复制 SHA-256"), text=h, note=tr("已复制。可以把它粘贴到 VirusTotal 等网站查询这个文件。")))
+        acts.append(goto(tr("到程序签名页查看"), "diag", sub="sig", auto="scan"))
+        F.append(_f("sig_" + r["path"], "security", LV_CRIT if r["risk"] == "crit" else LV_WARN,
+                    tr("签名被破坏的程序") if r["status"] == "invalid" else tr("来源可疑的程序"),
+                    f"{r['name']} ({sig.status_text(r['status'])}) · {r['path'][:80]}",
+                    tr("如果不是你安装的软件，请停用或结束它；也可以复制文件的 SHA-256 去 VirusTotal 查询。"), acts))
+    if len(probs) > 8:
+        F.append(_f("sig_more", "security", LV_WARN, tr("来源可疑的程序"), tr("另有 {0} 个", len(probs) - 8), tr("到“程序签名”页逐个确认。"),
+                    [goto(tr("到程序签名页查看"), "diag", sub="sig", auto="scan")]))
+    if not probs:
+        F.append(_f("sig", "security", LV_OK, tr("程序签名"), tr("检查了 {0} 个程序，没有发现签名问题", len(rows)), ""))
+    F += baseline_findings(task)
+    return F
+
+
+def baseline_findings(task=None):
+    base = bl.load()
+    if not base:
+        return [_f("baseline_none", "security", LV_INFO, tr("基线对比"), tr("还没有建立基线"),
+                   tr("在你确认电脑目前干净的时候，把现在的状态记为基线；以后只提醒你“多了什么”。"),
+                   [act("set_baseline", tr("把现在的状态设为基线"), page="baseline"), goto(tr("到基线页查看"), "diag", sub="baseline")])]
+    d = bl.diff(base["items"], bl.collect())
+    startup_objs = {f"{it['kind']}|{it['name']}|{it.get('cmd', '')}": it for it in core.get_startup_items()}
+    level = {"admins": LV_CRIT, "ssh_keys": LV_CRIT, "startup": LV_WARN, "tasks": LV_WARN, "hosts": LV_WARN,
+             "ports": LV_INFO, "programs": LV_INFO}
+    F = []
+    for key, name in bl.CATS:
+        e = d.get(key)
+        if not e or not e["added"]:
+            continue
+        added = e["added"]
+        lv = LV_WARN if (key == "ports" and len(added) > 3) else level[key]
+        acts = []
+        if key == "startup":
+            items = [startup_objs[x] for x in added if x in startup_objs]
+            if items:
+                acts.append(act("disable_startup", tr("停用这些启动项"), page="startup", items=items))
+        acts += [act("accept_baseline", tr("这些是我自己装的（接受为新基线）"), page="baseline"),
+                 goto(tr("查看变化"), "diag", sub="baseline", auto="compare")]
+        F.append(_f("baseline_" + key, "security", lv, tr("{0}有新增", name),
+                    tr("新增 {0} 项：{1}", len(added), "; ".join(bl.pretty(key, x) for x in added[:3]) + (" …" if len(added) > 3 else "")),
+                    tr("和基线相比多出来的东西。如果不是你做的，请重点核查。"), acts))
+    if not F:
+        F.append(_f("baseline", "security", LV_OK, tr("基线对比"), tr("和基线相比，没有新增的启动项、计划任务、端口、管理员账户"), ""))
+    return F
+
+
+# ---------------------------------------------------------------- 加固与更新
+_LV_RAW = {"crit": LV_CRIT, "warn": LV_WARN, "info": LV_INFO, "ok": LV_OK}
+
+
+def _fix_actions(fix, page):
+    if not fix:
+        return []
+    if "settings" in fix:
+        what = fix["settings"]
+        return [act("open_settings", SETTINGS_LABEL[what](), page=page, what=what)]
+    return [act("copy_text", tr("复制修复命令"), page=page, text=fix["command"],
+                note=tr("命令已复制。请在终端 / 管理员 PowerShell 里粘贴运行。"))]
+
+
+def harden_findings(task=None, deep=False):
+    F = []
+    if task is not None:
+        task.tick(tr("正在检查：系统更新"))
+    raw = patch.check(deep)
+    if task is None or task.tick(tr("正在检查：安全加固")):
+        raw += harden.check_all(deep)
+    for x in raw:
+        acts = _fix_actions(x["fix"], "harden")
+        if x["key"] == "eol":
+            acts = [goto(tr("到卸载页处理"), "uninstall", auto="load")]
+        elif x["level"] != "ok":
+            acts.append(goto(tr("查看加固清单"), "diag", sub="harden", auto="scan"))
+        F.append(_f("h_" + x["key"], "harden", _LV_RAW[x["level"]], x["title"], x["detail"], x["advice"], acts))
     return F
 
 
@@ -465,34 +567,22 @@ def run_diagnosis(task=None, deep=False):
     top = sample_top() if stage(tr("正在检查：内存与 CPU")) else {}
     res = diagnose(snap, junk, top)
     F = res["findings"]
-    for label, fn in ((tr("存储"), storage_findings), (tr("安全"), security_findings), (tr("钱包"), wallet_findings)):
+    for label, fn, cat in ((tr("存储"), storage_findings, "storage"), (tr("安全"), security_findings, "security"),
+                           (tr("程序签名与基线"), trust_findings, "security"), (tr("加固与更新"), harden_findings, "harden"),
+                           (tr("钱包"), wallet_findings, "wallet")):
         if task is not None and task.cancelled:
             break
         stage(tr("正在检查：{0}", label))
         try:
             F += fn(task, deep)
         except Exception as e:
-            F.append(_f("err_" + label, {tr("存储"): "storage", tr("安全"): "security", tr("钱包"): "wallet"}[label], LV_INFO,
-                        label, tr("这一项没有检查完：{0}", e), ""))
+            F.append(_f("err_" + cat + label, cat, LV_INFO, label, tr("这一项没有检查完：{0}", e), ""))
     F.sort(key=lambda f: _LV_ORDER[f["level"]])
     return dict(score=score_of(F), cats=category_scores(F), findings=F, snapshot=snap, deep=deep)
 
 
 # ============================================================ 启动影响评分
-def parse_exe(cmd, kind=""):
-    """从启动项命令里取出可执行文件路径"""
-    c = (cmd or "").strip()
-    if not c:
-        return ""
-    if kind == "desktop":
-        c = re.sub(r"%[a-zA-Z]\b", "", c).strip()
-    if c.startswith('"'):
-        end = c.find('"', 1)
-        exe = c[1:end] if end > 0 else c[1:]
-    else:
-        m = re.match(r"(.+?\.(?:exe|bat|cmd|com|scr))(?:\s|$)", c, re.I)
-        exe = m.group(1) if m else c.split()[0]
-    return os.path.expandvars(exe)
+parse_exe = sig.parse_exe          # 已移到 faster_sig.py，这里保留名字
 
 
 def _running_index():

@@ -89,29 +89,33 @@ out["cjk"] = sorted({x for x in fake_tk.SEEN if CJK.search(x)})
 print(json.dumps(out))
 """
 
+V04_FLOW = '\nclass FL:                                                  # 一个真正能存东西的假 Listbox\n    def __init__(self): self.items = []\n    def insert(self, _pos, v): self.items.append(v)\n    def get(self, a, b=None): return list(self.items)\n    def curselection(self): return list(range(len(self.items)))\n    def delete(self, i): del self.items[i]\n    def pack(self, *a, **k): pass\ndef pick_all(t): t.selected = lambda: list(t.data.items())\nout = {}\nmk(H + "/proj/a/v.mp4", 3000000); mk(H + "/proj/a/p.jpg", 3000000); mk(H + "/proj/b/doc.bin", 3000000); mk(H + "/proj/b/c/other.bin", 3000000)\nL = app.tabs["large"]; L.root_var.set(H + "/proj"); L.mb.set("1")\nL.scan(); drain(); out["large_all"] = len(L.data)\nL.excl.vars["video"].set(True); L.excl.save(); L.scan(); drain(); out["large_no_video"] = len(L.data)\nL.excl.vars["image"].set(True); L.excl.save(); L.scan(); drain(); out["large_no_video_image"] = len(L.data)\nL.excl.box = FL(); sys.modules["tkinter.filedialog"].askdirectory = lambda **k: H + "/proj/b"\nL.excl.add_folder(); L.scan(); drain(); out["large_no_folder"] = len(L.data)\nout["saved"] = core.exclusion_config("large")\nout["dup_unaffected"] = core.exclusion_config("dup")\nL.excl.remove(); out["after_remove"] = core.exclusion_config("large")["folders"]\nD = app.tabs["dup"]; D.excl.vars["archive"].set(True); D.excl.save(); out["dup_saved"] = core.exclusion_config("dup")["groups"]\nD.root_var.set(H + "/proj"); D.scan(); drain(); out["dup_rows"] = len(D.data)\nhub = app.tabs["diag"].subtabs\nS = hub["sig"]; S.scan(); drain(); out["sig_rows"] = len(S.data); pick_all(S); S.copy_hash(); S.reveal()\nB = hub["baseline"]; B.compare(); drain(); out["baseline_none"] = bl_load_is_none = (__import__("faster_baseline").load() is None)\nB.set_baseline(); drain(); out["baseline_set"] = __import__("faster_baseline").load() is not None\nB.compare(); drain(); out["baseline_rows_same"] = len(B.data)\nopen(H + "/.hosts_test", "w").write("x")\nB.accept(); drain()\nHd = hub["harden"]; Hd.scan(); drain(); out["harden_rows"] = len(Hd.data); pick_all(Hd); Hd.fix()\napp.op_copy_text({}, {"text": "abc", "note": "ok"})\nout["messages"] = len(fake_tk.MESSAGES)\nout["cjk"] = sorted({x for x in fake_tk.SEEN if CJK.search(x)})\nprint(json.dumps(out))\n'
+
 ALLOWED_CJK_IN_EN = {"Language / 语言: ", "简体中文"}
 
 
 class GuiSmoke(unittest.TestCase):
     def test_diagnosis_center_zh(self):
         r = run_flow(DIAG_FLOW, "zh")
-        self.assertEqual(r["cats"], ["perf", "security", "storage", "wallet"])
+        self.assertEqual(r["cats"], ["harden", "perf", "security", "storage", "wallet"])
         self.assertIn("empty_trash", r["ops"])
         self.assertIn("goto", r["ops"])
         self.assertIn("empty_trash", r["done"])
+        self.assertIn("set_baseline", r["ops"])                     # 还没有基线时，诊断会建议先建立
+        self.assertIn("set_baseline", r["done"])
         self.assertIn("clean_junk", r["ops"])
         self.assertIn("clean_junk", r["done"])
         if sys.platform.startswith("linux"):                       # 可疑启动项用 Linux 的 autostart 文件模拟
             self.assertIn("disable_startup", r["ops"])
             self.assertIn("disable_startup", r["done"])
-        for page in ("junk", "startup", "impact", "proc", "restore", "security", "wallet"):
+        for page in ("junk", "startup", "impact", "proc", "restore", "security", "wallet", "sig", "baseline", "harden"):
             self.assertIn(page, r["panels"])                  # 这些页面顶部都挂了“建议操作”面板
         self.assertGreater(r["deep"], r["n"] - 5)
         self.assertEqual(r["busy"], 0)
 
     def test_diagnosis_center_en_has_no_chinese(self):
         r = run_flow(DIAG_FLOW, "en")
-        self.assertEqual(r["cats"], ["perf", "security", "storage", "wallet"])
+        self.assertEqual(r["cats"], ["harden", "perf", "security", "storage", "wallet"])
         self.assertIn("clean_junk", r["done"])
         self.assertEqual(r["busy"], 0)
         self.assertEqual([x for x in r["cjk"] if x not in ALLOWED_CJK_IN_EN], [])
@@ -126,6 +130,27 @@ class GuiSmoke(unittest.TestCase):
         self.assertEqual(r["restore_after"], 0)
         self.assertEqual((r["history"], r["history_after"]), (3, 0))      # 清理前后各 1 条 + 手动记录 1 条
         self.assertEqual(r["busy"], 0)
+
+    def test_v04_exclusions_and_new_tabs_zh(self):
+        r = run_flow(V04_FLOW, "zh")
+        self.assertEqual(r["large_all"], 4)
+        self.assertEqual(r["large_no_video"], 3)                  # 排除“视频”后少了 .mp4
+        self.assertEqual(r["large_no_video_image"], 2)            # 再排除“图片”后少了 .jpg
+        self.assertEqual(r["large_no_folder"], 0)                 # 再排除 proj/b 文件夹（含子文件夹）后只剩 0 个
+        self.assertEqual(r["saved"]["groups"], ["video", "image"])
+        self.assertEqual(len(r["saved"]["folders"]), 1)
+        self.assertEqual(r["dup_unaffected"], {})                 # 大文件页的设置不影响重复文件页
+        self.assertEqual(r["after_remove"], [])
+        self.assertEqual(r["dup_saved"], ["archive"])
+        self.assertTrue(r["baseline_none"])
+        self.assertTrue(r["baseline_set"])
+        self.assertEqual(r["baseline_rows_same"], 0)
+        self.assertGreaterEqual(r["messages"], 1)
+
+    def test_v04_new_tabs_en_has_no_chinese(self):
+        r = run_flow(V04_FLOW, "en")
+        self.assertEqual(r["large_no_video"], 3)
+        self.assertEqual([x for x in r["cjk"] if x not in ALLOWED_CJK_IN_EN], [])
 
     def test_other_tabs_en_has_no_chinese(self):
         r = run_flow(TABS_FLOW, "en")

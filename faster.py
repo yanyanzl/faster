@@ -18,7 +18,7 @@ Faster Faster  (Windows / macOS / Linux)
 
 依赖：Python 3.8+。可选：pip install psutil send2trash
 """
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 import os
 import sys
@@ -368,15 +368,102 @@ SKIP_DIR_SUFFIX = (".app", ".photoslibrary", ".framework", ".bundle")
 SKIP_FILE_EXT = {".dll", ".sys", ".so", ".dylib", ".plist", ".kext", ".drv", ".msi"}
 
 
-def walk_user_files(root, min_size, task=None):
+# ---- 用户自选的“排除”（大文件 / 重复文件页面）：排除某些文件类型、某些文件夹，扫描时直接跳过 ----
+FILE_GROUPS = {   # 分组 id: (显示名, 扩展名)
+    "video": (tr("视频"), (".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg", ".rmvb")),
+    "image": (tr("图片"), (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heic", ".heif", ".tif", ".tiff", ".raw",
+                         ".cr2", ".nef", ".arw", ".dng", ".psd")),
+    "audio": (tr("音频"), (".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".wma", ".ape")),
+    "document": (tr("文档"), (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md", ".odt", ".rtf", ".epub")),
+    "archive": (tr("压缩包"), (".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".tgz")),
+    "diskimage": (tr("磁盘镜像 / 虚拟机"), (".iso", ".img", ".vmdk", ".vdi", ".qcow2", ".vhd", ".vhdx", ".dmg")),
+}
+
+
+class Exclusions:
+    """扫描时要跳过的文件类型（分组 + 自定义扩展名）和文件夹"""
+
+    def __init__(self, groups=(), exts=(), folders=()):
+        e = set()
+        for g in groups:
+            e.update(FILE_GROUPS.get(g, ("", ()))[1])
+        for x in exts:
+            x = (x or "").strip().lower()
+            if x:
+                e.add(x if x.startswith(".") else "." + x)
+        self.exts = frozenset(e)
+        self.folders = tuple(self._norm(f) for f in folders if f)
+        self.groups, self.extra_exts, self.raw_folders = tuple(groups), tuple(exts), tuple(folders)
+
+    @staticmethod
+    def _norm(p):
+        return os.path.normcase(os.path.abspath(str(p))).rstrip("\\/")
+
+    def skip_dir(self, path):
+        n = self._norm(path)
+        return any(n == f or n.startswith(f + os.sep) for f in self.folders)
+
+    def skip_file(self, name):
+        return os.path.splitext(name)[1].lower() in self.exts
+
+    def __bool__(self):
+        return bool(self.exts or self.folders)
+
+    @classmethod
+    def from_config(cls, cfg):
+        cfg = cfg or {}
+        return cls(cfg.get("groups", ()), cfg.get("exts", ()), cfg.get("folders", ()))
+
+    def summary(self):
+        """一句话：已排除哪些（没有则返回空字符串）"""
+        parts = [FILE_GROUPS[g][0] for g in self.groups if g in FILE_GROUPS] + [x for x in self.extra_exts if x.strip()]
+        if self.folders:
+            parts.append(tr("{0} 个文件夹", len(self.folders)))
+        return tr("已排除：{0}", tr("、").join(parts)) if parts else ""
+
+
+def settings_load():
+    import faster_i18n
+    return faster_i18n.load_settings()
+
+
+def settings_update(**kv):
+    import faster_i18n
+    st = faster_i18n.load_settings()
+    st.update(kv)
+    faster_i18n.SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    faster_i18n.SETTINGS.write_text(json.dumps(st, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def exclusion_config(page):
+    return dict(settings_load().get("exclude", {}).get(page, {}))
+
+
+def exclusion_save(page, cfg):
+    ex = dict(settings_load().get("exclude", {}))
+    ex[page] = cfg
+    settings_update(exclude=ex)
+
+
+def exclusions_for(page):
+    """某个页面（'large' / 'dup'）当前保存的排除设置"""
+    return Exclusions.from_config(exclusion_config(page))
+
+
+def walk_user_files(root, min_size, task=None, exclude=None):
+    if exclude and exclude.skip_dir(root):
+        return
     for r, dirs, files in os.walk(root, onerror=lambda e: None):
         if task is not None and not task.tick(r):
             return
         dirs[:] = [d for d in dirs if d.lower() not in SKIP_DIR_NAMES
                    and not d.lower().endswith(SKIP_DIR_SUFFIX)
-                   and not os.path.islink(os.path.join(r, d))]
+                   and not os.path.islink(os.path.join(r, d))
+                   and not (exclude and exclude.skip_dir(os.path.join(r, d)))]
         for f in files:
             if os.path.splitext(f)[1].lower() in SKIP_FILE_EXT:
+                continue
+            if exclude and exclude.skip_file(f):
                 continue
             fp = os.path.join(r, f)
             if is_wallet_path(fp):
@@ -391,10 +478,10 @@ def walk_user_files(root, min_size, task=None):
                 pass
 
 
-def find_duplicates(root, min_mb=1, task=None):
+def find_duplicates(root, min_mb=1, task=None, exclude=None):
     alive = (lambda p=None: True) if task is None else task.tick
     by_size = defaultdict(list)
-    for fp, sz, mt in walk_user_files(root, int(min_mb * 1048576), task):
+    for fp, sz, mt in walk_user_files(root, int(min_mb * 1048576), task, exclude):
         by_size[sz].append((fp, mt))
     groups = []
     for sz, lst in by_size.items():
