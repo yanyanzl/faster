@@ -28,6 +28,8 @@ import faster_sig as sig
 import faster_baseline as bl
 import faster_patch as patch
 import faster_harden as harden
+import faster_dev as dev
+import faster_disk as disk
 from faster_i18n import tr
 
 HOME, APP_DIR, human = core.HOME, core.APP_DIR, core.human
@@ -220,7 +222,8 @@ def diagnose(snap, junk_bytes=None, top=None, power=None):
         lv = LV_CRIT if (pct < 10 or free < 5 * GB) else LV_WARN if pct < 20 else LV_OK
         F.append(_f("disk", "storage", lv, tr("磁盘空间"), tr("剩余 {0}（{1:.0f}%）", human(free), pct),
                     tr("清理垃圾、大文件和重复文件；卸载不用的大型程序。"),
-                    [act("clean_junk", tr("清理垃圾"), page="junk"), goto(tr("查找大文件"), "large", auto="scan")]))
+                    [act("clean_junk", tr("清理垃圾"), page="junk"), goto(tr("查找大文件"), "large", auto="scan"),
+                     goto(tr("查看空间占用"), "space", auto="scan")]))
     if "mem_percent" in snap:
         p = snap["mem_percent"]
         lv = LV_CRIT if p >= 90 else LV_WARN if p >= 80 else LV_OK
@@ -303,7 +306,29 @@ def storage_findings(task=None, deep=False):
         F.append(_f("tooltrash", "storage", LV_WARN, tr("工具回收站"), tr("Faster 的回收站占用 {0}", human(toolsz)),
                     tr("到“还原中心”确认没有需要还原的文件后，再永久清空。"),
                     [goto(tr("到还原中心查看"), "restore"), act("empty_tool_trash", tr("永久清空"), page="restore")]))
+    # 开发者缓存（只在这台电脑上装了开发工具时才会出现）
+    if task is None or task.tick(tr("正在检查：开发者缓存")):
+        rows = dev.scan_caches(task, max_seconds=25)
+        if rows:
+            total = sum(r["size"] for r in rows)
+            lv = LV_CRIT if total >= 20 * GB else LV_WARN if total >= 2 * GB else LV_OK
+            F.append(_f("devcache", "storage", lv, tr("开发者缓存"),
+                        tr("{0} 个工具的缓存共约 {1}；最大的是 {2}（{3}）", len(rows), human(total), rows[0]["name"], human(rows[0]["size"])),
+                        tr("这些缓存都能重新生成，清理后第一次构建会慢一些。"),
+                        [act("clean_dev", tr("清理开发缓存（约 {0}）", human(total)), page="dev"),
+                         goto(tr("查看明细"), "dev", auto="scan")]))
+    # 磁盘健康（SMART）
+    for x in disk.check():
+        F.append(_f(x["key"], "storage", _LV_RAW[x["level"]], x["title"], x["detail"], x["advice"], _fix_actions(x["fix"], None)))
     if deep:
+        if task is None or task.tick(tr("正在查找长期没动的项目依赖…")):
+            projs = dev.stale_projects(HOME, 90, task, core.exclusions_for("large"))
+            if projs:
+                total = sum(r["size"] for r in projs)
+                F.append(_f("stale_projects", "storage", LV_WARN if total >= 2 * GB else LV_INFO, tr("旧项目的依赖目录"),
+                            tr("{0} 个超过 90 天没动过的项目里，依赖目录共约 {1}", len(projs), human(total)),
+                            tr("这些目录能用一条命令重新生成；清理后会进回收站，可以在“还原中心”还原。"),
+                            [goto(tr("查看并清理"), "dev", auto="scan_projects")]))
         if task is not None and not task.tick(tr("正在查找大文件…")):
             return F
         big = list(core.walk_user_files(HOME, 500 * MB, task, core.exclusions_for("large")))

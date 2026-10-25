@@ -1,12 +1,12 @@
-# Faster v0.4.0 · Usage & build guide
+# Faster v0.5.0 · Usage & build guide
 
 [中文](README.md) | **English**
 
 Faster is a cross-platform (Windows / macOS / Linux) PC cleaner and wallet-safety helper: it frees disk space, speeds up your computer, scans for risks, and protects crypto wallets. It has a GUI, a CLI, and scheduled auto-cleaning.
 
 Deliverables:
-- Windows: `Faster-0.4.0.exe` (single file, double-click to run)
-- macOS: `Faster-0.4.0.dmg` (open it and drag Faster into “Applications”)
+- Windows: `Faster-0.5.0.exe` (single file, double-click to run)
+- macOS: `Faster-0.5.0.dmg` (open it and drag Faster into “Applications”)
 
 PyInstaller cannot cross-compile — **build the Windows version on Windows and the Mac version on a Mac**. Pick either way:
 
@@ -37,8 +37,8 @@ PyInstaller cannot cross-compile — **build the Windows version on Windows and 
 - Change the version only in `__version__` at the top of `faster.py`; the window title, `--version`, the dmg/exe file names and the Mac app info follow automatically.
 - To release a new version, commit and push a tag; GitHub then builds and publishes automatically (for the current version):
   ```
-  git add . && git commit -m "v0.4.0"
-  git tag v0.4.0 && git push origin main v0.4.0
+  git add . && git commit -m "v0.5.0"
+  git tag v0.5.0 && git push origin main v0.5.0
   ```
 - Changes for every version are recorded in `CHANGELOG.md`.
 
@@ -72,6 +72,17 @@ When running from source, you are asked before scanning whether to download it (
 
 **Important**: Faster will never ask you for a mnemonic or private key. If a scan finds a plaintext mnemonic/private key, the safest course is to move your assets to a freshly generated wallet, write the new mnemonic on paper and keep it offline, then delete or encrypt the old plaintext files. “Delete” on an SSD does not guarantee the data cannot be recovered.
 
+## v0.5 Developer cleanup, space analysis, disk health
+**Developer cleanup** (the “Developer cleanup” tab): on a developer's machine the biggest “junk” is usually the caches of package managers and build tools, plus the dependency folders of old projects.
+- **Caches**: npm, Yarn, pnpm, pip, cargo, Go (build / module caches), Gradle, Maven, NuGet, Xcode (DerivedData / DeviceSupport), CocoaPods, Homebrew, Conda, JetBrains IDEs, VS Code, and Docker's reclaimable build cache and unused images. Only what actually exists on this computer is listed.
+- **Old project dependencies**: click “Find old project dependencies” to find `node_modules`, Python virtual environments (`venv` / `.venv`) and Rust `target` folders in projects untouched for more than N days (90 by default, adjustable). It honours the excluded folders set on the “Large files” tab.
+- All of this can be **regenerated** (re-downloaded / rebuilt), so cleaning is safe; the next use is just a bit slower and needs the network. **Caches are deleted permanently**; **old project dependency folders go to the Recycle Bin** and can be restored from the “Restore center”. Wallet files are never touched.
+- When the diagnosis finds large developer caches, a “Clean developer caches” button appears there, and at the top of this tab.
+
+**Space analysis** (the “Space analysis” tab): draws disk usage as a **treemap** — the bigger the tile, the more space it uses. Click a tile to select it, **double-click a folder to open it**, “Up one level” to go back; you can “Move to Recycle Bin” or “Show in folder” for the selected item. Grey tiles are files and light grey is the total of many small items. When the diagnosis finds low disk space it offers a “View space usage” button that brings you here.
+
+**Disk health** (the “Storage” category of the diagnosis): reads the health status the system reports, read-only — Windows' Get-PhysicalDisk health (plus wear, temperature and read/write errors when available); macOS SMART status; Linux `smartctl -H` (needs smartmontools and usually administrator rights; a command to copy is provided). If a drive shows “unhealthy / failing”, **back up your important data right away**.
+
 ## v0.4 Updates & hardening, program signatures, baseline, exclusions, new look
 All of these checks live under “Diagnosis”: “One-click diagnosis” runs them together, and the sub-tabs of the “Diagnosis” tab let you look at and handle each one on its own.
 
@@ -85,14 +96,14 @@ All of these checks live under “Diagnosis”: “One-click diagnosis” runs t
 
 **New look**: consistent colors and fonts, a banner and resource cards on the Overview tab, a health-score gauge and colored cards on the Diagnosis tab, zebra-striped tables and highlighted primary buttons. If the styling cannot be applied it silently falls back to the system default look and everything still works; macOS keeps its native controls.
 
-## Diagnosis center: one click, then fix with buttons (v0.4.0)
+## Diagnosis center: one click, then fix with buttons (v0.5.0)
 **How to use**: on the Overview tab click **🔍 One-click diagnosis** (or open the “Diagnosis” tab and click “Start diagnosis”). It is read-only and changes nothing; a quick diagnosis takes about 10–30 seconds and can be cancelled any time with the “Cancel” button at the bottom.
 
 **Four categories are checked**
 | Category | What is checked |
 |---|---|
 | Performance | Memory, swap, CPU, number of startup items, uptime, Windows power plan |
-| Storage | Free disk space, reclaimable junk, Recycle Bin size; (deep) large files, duplicate files |
+| Storage | Free disk space, reclaimable junk, Recycle Bin size, **developer caches** (npm / pip / Gradle / Xcode / Docker…), **disk health** (SMART); (deep) large files, duplicate files, dependency folders of long-untouched projects |
 | Security | System protection (firewall / Defender / Gatekeeper / SIP), suspicious startup items, mining trojans, modified hosts file, **program signatures** (do auto-start programs and programs running from user folders carry a trusted signature?), **baseline comparison** (what is new compared with the “clean state” you recorded); (deep) processes and ports, scheduled tasks, executables in temp folders |
 | Hardening & updates | **System updates** (Windows patch age / restart pending; macOS automatic-update switches; Linux upgradable packages and security updates), software that is no longer maintained (Flash, QuickTime, Python 2, Java 6/7…), **security hardening** (disk encryption, auto login, Remote Desktop / SSH, UAC, SMBv1, screen lock, backups, high-risk open ports); (deep, online) which updates are still not installed |
 | Wallet | Wallet files and plaintext mnemonics/private keys in cloud-synced folders, whether the BIP39 word list is ready; (deep) wallet files and plaintext keys in your whole home folder |

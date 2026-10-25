@@ -1852,4 +1852,146 @@ CATALOG = {
         "Health score",
     "让电脑更快、更安全":
         "Faster, safer computing",
+    "扫描开发缓存":
+        "Scan developer caches",
+    "查找旧项目依赖":
+        "Find old project dependencies",
+    "清理选中":
+        "Clean selected",
+    "扫描开发缓存…":
+        "Scanning developer caches...",
+    "查找长期没动的项目依赖…":
+        "Looking for project dependencies nobody has touched for a long time...",
+    "分析空间占用…":
+        "Analyzing disk usage...",
+    "这些东西都能再生（重新下载 / 重新构建），清理是安全的，只是下次用会慢一些、要联网。缓存是永久删除；旧项目的依赖目录进回收站，可在“还原中心”还原。":
+        "All of these can be regenerated (re-downloaded / rebuilt), so cleaning is safe; the next use is just a little slower and needs the network. Caches are deleted permanently; old project dependency folders go to the Recycle Bin and can be restored from the “Restore center”.",
+    "{0} · {1} 天没动过":
+        "{0} · untouched for {1} days",
+    "清理选中的 {0} 项（约 {1}）？\n缓存会被永久删除，项目依赖目录会移到回收站。这些都能重新生成。":
+        "Clean the {0} selected items (about {1})?\nCaches are deleted permanently and project dependency folders go to the Recycle Bin. All of them can be regenerated.",
+    "将清理 {0} 个工具的缓存，共约 {1}。缓存会被永久删除，但都能重新生成。继续？":
+        "About to clean the caches of {0} tools, about {1} in total. Caches are deleted permanently, but all of them can be regenerated. Continue?",
+    "面积越大占的空间越多。点一块选中，双击进入文件夹；灰色的块是文件，浅灰色是许多小项的合计。":
+        "The bigger the tile, the more space it uses. Click a tile to select it and double-click a folder to open it; grey tiles are files and light grey is the total of many small items.",
+    "先点选一块要处理的文件或文件夹。":
+        "Click a file or folder tile first.",
+    "将“{0}”（{1}）移到回收站？可以在“还原中心”或系统回收站里找回。":
+        "Move “{0}” ({1}) to the Recycle Bin? You can get it back from the “Restore center” or the system trash.",
+    "开发者清理":
+        "Developer cleanup",
+    "空间分析":
+        "Space analysis",
+    "缓存":
+        "Cache",
+    "项目依赖":
+        "Project deps",
+    "共 {0} 项，约 {1}。选中后点“清理选中”。":
+        "{0} items, about {1}. Select some and click “Clean selected”.",
+    "没有发现可清理的开发缓存。":
+        "No developer caches found to clean.",
+    "已清理，释放约 {0}":
+        "Cleaned, freed about {0}",
+    "点“开始分析”，看看空间都被谁占了。":
+        "Click “Start analysis” to see what is using your space.",
+    "超过":
+        "Older than",
+    "天没动过":
+        "days untouched",
+    "清理开发缓存":
+        "Clean developer caches",
+    "开始分析":
+        "Start analysis",
+    "选择文件夹…":
+        "Choose folder...",
+    "上一级":
+        "Up one level",
+    "移到回收站":
+        "Move to Recycle Bin",
+    "{0}：共 {1}，{2} 项。双击文件夹进入，点一块选中。":
+        "{0}: {1} in total, {2} items. Double-click a folder to open it, click a tile to select it.",
+    "（已取消，只是部分结果）":
+        "(cancelled, partial results only)",
+    "正在检查：开发者缓存":
+        "Checking: developer caches",
+    "正在查找长期没动的项目依赖…":
+        "Looking for project dependencies untouched for a long time...",
+    "开发者缓存":
+        "Developer caches",
+    "{0} 个工具的缓存共约 {1}；最大的是 {2}（{3}）":
+        "The caches of {0} tools use about {1}; the largest is {2} ({3})",
+    "这些缓存都能重新生成，清理后第一次构建会慢一些。":
+        "All of these caches can be regenerated; the first build after cleaning is a little slower.",
+    "查看空间占用":
+        "View space usage",
+    "旧项目的依赖目录":
+        "Dependency folders of old projects",
+    "{0} 个超过 90 天没动过的项目里，依赖目录共约 {1}":
+        "In {0} projects untouched for over 90 days, dependency folders use about {1}",
+    "这些目录能用一条命令重新生成；清理后会进回收站，可以在“还原中心”还原。":
+        "These folders can be regenerated with one command; after cleaning they go to the Recycle Bin and can be restored from the “Restore center”.",
+    "清理开发缓存（约 {0}）":
+        "Clean developer caches (about {0})",
+    "查看明细":
+        "View details",
+    "查看并清理":
+        "View and clean",
+    "缓存，清理后会在需要时自动重新下载":
+        "Cache; it is downloaded again automatically when needed",
+    "构建缓存，清理后第一次构建会慢一些":
+        "Build cache; the first build after cleaning is a little slower",
+    "依赖缓存，清理后下次构建需要重新下载（要联网）":
+        "Dependency cache; the next build must download it again (needs the network)",
+    "Node.js 项目的依赖":
+        "Dependencies of a Node.js project",
+    "Rust 项目的编译产物":
+        "Build output of a Rust project",
+    "Python 虚拟环境":
+        "Python virtual environment",
+    "构建缓存":
+        "build cache",
+    "模块缓存":
+        "module cache",
+    "编译产物，Xcode 会自动重新生成":
+        "Build output; Xcode regenerates it automatically",
+    "调试用的设备支持文件，下次连接设备时会重新生成":
+        "Device support files for debugging; regenerated the next time you connect a device",
+    "Docker 的构建缓存，清理后重新构建会慢一些":
+        "Docker's build cache; rebuilding is a little slower after cleaning",
+    "没有被任何容器使用的镜像，需要时会重新拉取":
+        "Images not used by any container; they are pulled again when needed",
+    "未使用的镜像":
+        "unused images",
+    "其他 {0} 项":
+        "{0} other items",
+    "立即备份重要数据，并准备更换硬盘。":
+        "Back up your important data right now and get ready to replace the drive.",
+    "SMART 自检：通过":
+        "SMART self-test: passed",
+    "SMART 自检：失败":
+        "SMART self-test: failed",
+    "需要管理员权限才能读取 SMART":
+        "Administrator rights are needed to read SMART",
+    "健康状态：不健康":
+        "Health status: unhealthy",
+    "SMART 状态：即将故障":
+        "SMART status: failing",
+    "磁盘健康":
+        "Disk health",
+    "健康状态：{0}（{1}）":
+        "Health status: {0} ({1})",
+    "SMART 状态：正常":
+        "SMART status: OK",
+    "已磨损 {0}%":
+        "{0}% worn",
+    "温度 {0}℃":
+        "Temperature {0}℃",
+    "累计读写错误 {0} 次":
+        "{0} read/write errors in total",
+    "健康":
+        "Healthy",
+    "没有安装 smartmontools，读不到 SMART":
+        "smartmontools is not installed, so SMART cannot be read",
+    "安装后才能查看硬盘健康状态。":
+        "Install it to see the drive's health status.",
 }

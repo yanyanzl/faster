@@ -2,6 +2,15 @@
 
 版本号规则：`主版本.次版本.修订`，唯一来源是 `faster.py` 顶部的 `__version__`。
 
+## v0.5.0 —— 开发者清理、空间分析、磁盘健康
+- **开发者缓存清理**（`faster_dev.py` + “开发者清理”页签）：npm / Yarn / pnpm / pip / cargo / Go / Gradle / Maven / NuGet / Xcode / CocoaPods / Homebrew / Conda / JetBrains / VS Code 的缓存，加 Docker 可回收的构建缓存和未使用镜像（调用官方清理命令）；只列出这台电脑上存在的。缓存永久删除（目录本身保留，钱包文件即使混在里面也不碰）。
+- **旧项目依赖**：找出超过 N 天没动过的项目里的 `node_modules`（需要 package.json）、Python 虚拟环境（需要 pyvenv.cfg）、Rust `target`（需要 Cargo.toml），不再往依赖目录里面走；遵守“大文件”页的排除文件夹；清理走回收站，可在“还原中心”还原。
+- **空间分析**（`faster_space.py` + “空间分析”页签）：一次扫描汇总第一层子项大小，用 squarified treemap 画成树图（面积与占用成正比、无重叠、长宽比合理）；点选、双击进入文件夹、上一级、移到回收站、打开所在位置；占比太小的合并成“其他 N 项”；符号链接不跟进；可取消并保留部分结果。
+- **磁盘健康**（`faster_disk.py`）：Windows Get-PhysicalDisk 健康状态 + 磨损 / 温度 / 读写错误；macOS SMART 状态；Linux smartctl（权限不足 / 没装时给出可复制的命令，不把“打不开设备”误报成硬盘故障）。
+- **诊断联动**：存储类新增“开发者缓存”“磁盘健康”，深度诊断新增“旧项目的依赖目录”；新增动作 `clean_dev`；磁盘空间不足的卡片增加“查看空间占用”。
+- **测试**：新增 `tests/test_v05.py`（树图的面积 / 边界 / 无重叠 / 长宽比 / 退化输入，空间扫描的聚合与符号链接，开发缓存的扫描与清理（含钱包文件保护）、Docker 输出解析、旧项目识别规则与排除、磁盘健康各系统的输出解析、诊断联动与阈值），GUI 冒烟测试覆盖两个新页签（中文 + 英文，含诊断里的清理动作）；约 70 条英文译文。
+- Added: developer cache cleanup, old project dependency finder, treemap space analysis and disk health (SMART) checks.
+
 ## v0.4.0 —— 更新与加固、程序签名、基线对比、排除设置、新外观
 **新的检查（都接入“一键诊断”，每一项都带可以直接执行的按钮）**
 - **补丁与更新检查**（`faster_patch.py`）：Windows 最近一次补丁安装时间、是否需要重启、（联网）待安装的更新；macOS 自动更新开关、（联网）待安装的更新；Linux 可更新软件包数量与其中的安全更新、软件包索引是否过期、需要重启、（联网）dnf 更新；已停止维护的软件（Flash / QuickTime / Silverlight / Python 2 / Java 6·7）。

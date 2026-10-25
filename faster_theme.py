@@ -94,7 +94,7 @@ def apply(root):
     cfg("Danger.TButton", padding=(12, 6), background=P["crit"], foreground="#ffffff", bordercolor=P["crit"], borderwidth=1)
     mp("Danger.TButton", background=[("active", "#b91c1c"), ("pressed", "#b91c1c")])
     cfg("TNotebook", background=P["bg"], borderwidth=0, tabmargins=(10, 8, 10, 0))
-    cfg("TNotebook.Tab", padding=(14, 8), background="#e3e8f2", foreground=P["muted"], borderwidth=0)
+    cfg("TNotebook.Tab", padding=(10, 7), background="#e3e8f2", foreground=P["muted"], borderwidth=0)
     mp("TNotebook.Tab", background=[("selected", P["card"]), ("active", "#eef2ff")],
        foreground=[("selected", P["primary"])], expand=[("selected", (0, 0, 0, 2))])
     cfg("Treeview", background="#ffffff", fieldbackground="#ffffff", foreground=P["text"], rowheight=28,

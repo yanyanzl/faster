@@ -44,6 +44,8 @@ import faster as core  # noqa: E402
 import faster_crypto as fc  # noqa: E402
 import faster_diag as fd  # noqa: E402
 import faster_theme as theme  # noqa: E402
+import faster_dev as dev  # noqa: E402
+import faster_space as space  # noqa: E402
 import faster_sig as sig  # noqa: E402
 import faster_baseline as bl  # noqa: E402
 from faster_task import Task  # noqa: E402
@@ -700,6 +702,12 @@ def settings_command(what):
     return _SETTINGS.get(what, {}).get("win" if IS_WIN else "mac" if IS_MAC else "linux")
 
 
+# 标签页有 14 个：英文标题较长，会超出窗口宽度，所以英文界面用这套短标题（全是 ASCII，不走翻译目录）
+SHORT_TITLES = {"home": "Home", "diag": "Diagnosis", "junk": "Junk", "dev": "Dev", "large": "Large files", "dup": "Duplicates",
+                "space": "Space", "startup": "Startup", "proc": "Processes", "uninstall": "Uninstall", "security": "Security",
+                "wallet": "Wallet", "restore": "Restore", "schedule": "Schedule"}
+
+
 def empty_system_trash():
     """清空系统回收站 / 废纸篓，返回释放的字节数（Windows 无法得知，返回 0）"""
     if IS_WIN:
@@ -1075,6 +1083,223 @@ if tk:
                 messagebox.showinfo(tr("完成"), tr("回收站已清空"))
 
     # ------------------------------------------------------------ 大文件
+    class DevTab(ListTab):
+        """开发者清理：包管理器 / 构建工具的缓存 + 长期没动的项目里的依赖目录"""
+        PAGE = "dev"
+
+        def __init__(self, app):
+            super().__init__(app, [("kind", tr("类型"), 90, "w"), ("name", tr("项目"), 220, "w"), ("size", tr("大小"), 90, "e"),
+                                   ("note", tr("说明"), 330, "w"), ("path", tr("位置"), 380, "w")])
+            self.btn(tr("扫描开发缓存"), self.scan)
+            self.btn(tr("查找旧项目依赖"), self.scan_projects)
+            self.days = tk.StringVar(value="90")
+            ttk.Label(self.top, text=tr("超过")).pack(side="left", padx=(8, 2))
+            ttk.Spinbox(self.top, from_=7, to=3650, width=5, textvariable=self.days).pack(side="left")
+            ttk.Label(self.top, text=tr("天没动过")).pack(side="left", padx=(2, 8))
+            self.btn(tr("全选"), self.select_all)
+            self.btn(tr("清理选中"), self.clean)
+            self.info.config(text=tr("这些东西都能再生（重新下载 / 重新构建），清理是安全的，只是下次用会慢一些、要联网。"
+                                     "缓存是永久删除；旧项目的依赖目录进回收站，可在“还原中心”还原。"))
+
+        def fill(self, rows, keep=False):
+            if not keep:
+                self.clear()
+            for r in rows:
+                kind = {"cache": tr("缓存"), "docker": "Docker", "project": tr("项目依赖")}[r["kind"]]
+                note = tr("{0} · {1} 天没动过", r["note"], r["days"]) if r["kind"] == "project" else r["note"]
+                self.add((kind, r["name"], human(r["size"]), note, "; ".join(r["paths"]) if r["paths"] else "-"), r)
+            tot = sum(o["size"] for o in self.data.values())
+            self.info.config(text=tr("共 {0} 项，约 {1}。选中后点“清理选中”。", len(self.data), human(tot)) if self.data else tr("没有发现可清理的开发缓存。"))
+
+        def scan(self):
+            task = Task()
+            self.app.run_bg(lambda: dev.scan_caches(task), lambda rows: (self.fill(rows), self.done_note(task)),
+                            tr("扫描开发缓存…"), task=task)
+
+        def scan_projects(self):
+            try:
+                days = max(1, int(float(self.days.get())))
+            except ValueError:
+                days = 90
+            task, ex = Task(), core.exclusions_for("large")
+            self.app.run_bg(lambda: dev.stale_projects(HOME, days, task, ex),
+                            lambda rows: (self.fill([r for r in rows], keep=True), self.done_note(task)),
+                            tr("查找长期没动的项目依赖…"), task=task)
+
+        def clean(self):
+            sel = self.need_selection()
+            if not sel:
+                return
+            total = sum(o["size"] for _, o in sel)
+            if not messagebox.askyesno(tr("确认"), tr("清理选中的 {0} 项（约 {1}）？\n缓存会被永久删除，项目依赖目录会移到回收站。这些都能重新生成。", len(sel), human(total))):
+                return
+            self.do_clean(sel)
+
+        def do_clean(self, sel, then=None):
+            before = effect_begin()
+
+            def work():
+                done, freed = [], 0
+                for iid, o in sel:
+                    if o["kind"] == "project":
+                        if core.safe_remove(o["path"]):
+                            done.append(iid)
+                            freed += o["size"]
+                    else:
+                        n = dev.clean(o)
+                        done.append(iid)
+                        freed += n or (o["size"] if o["kind"] == "cache" else 0)
+                return done, freed
+
+            def finish(r):
+                done, freed = r
+                for iid in done:
+                    self.tree.delete(iid)
+                    self.data.pop(iid, None)
+                messagebox.showinfo(tr("完成"), with_effect(tr("已清理，释放约 {0}", human(freed)), effect_end(before, tr("清理开发缓存"))))
+                if then:
+                    then()
+
+            self.app.run_bg(work, finish, tr("清理中…"))
+
+        def clean_all(self, then=None):
+            """诊断页的“清理开发缓存”按钮：扫描 → 告诉你能清多少 → 确认后清理（不含旧项目依赖，那个要你自己挑）"""
+            task = Task()
+
+            def done(rows):
+                if not rows or task.cancelled:
+                    return messagebox.showinfo(tr("提示"), tr("没有发现可清理的开发缓存。")) if not rows else None
+                if messagebox.askyesno(tr("确认"), tr("将清理 {0} 个工具的缓存，共约 {1}。缓存会被永久删除，但都能重新生成。继续？",
+                                                   len(rows), human(sum(r["size"] for r in rows)))):
+                    self.fill(rows)
+                    self.do_clean(list(self.data.items()), then)
+
+            self.app.run_bg(lambda: dev.scan_caches(task), done, tr("扫描开发缓存…"), task=task)
+
+    class SpaceTab(ttk.Frame):
+        """空间分析：树图（面积 = 占用空间）。点一块选中，双击进入文件夹"""
+
+        def __init__(self, app):
+            super().__init__(app.nb)
+            self.app, self.path, self.tiles, self.sel, self.cache = app, str(HOME), [], None, {}
+            P = theme.PALETTE
+            bar = ttk.Frame(self)
+            bar.pack(fill="x", padx=10, pady=(10, 4))
+            ttk.Button(bar, text=tr("开始分析"), style="Accent.TButton", command=lambda: self.scan()).pack(side="left")
+            ttk.Button(bar, text=tr("选择文件夹…"), command=self.choose).pack(side="left", padx=4)
+            ttk.Button(bar, text=tr("上一级"), command=self.up).pack(side="left", padx=4)
+            ttk.Button(bar, text=tr("刷新"), command=lambda: self.scan(force=True)).pack(side="left", padx=4)
+            ttk.Button(bar, text=tr("打开所在位置"), command=self.reveal).pack(side="left", padx=4)
+            ttk.Button(bar, text=tr("移到回收站"), command=self.trash_sel).pack(side="left", padx=4)
+            self.crumb = ttk.Label(self, text=self.path, style="Muted.TLabel")
+            self.crumb.pack(fill="x", padx=12)
+            self.info = ttk.Label(self, text=tr("面积越大占的空间越多。点一块选中，双击进入文件夹；灰色的块是文件，浅灰色是许多小项的合计。"),
+                                  style="Muted.TLabel")
+            self.info.pack(side="bottom", fill="x", padx=10, pady=6)
+            self.canvas = tk.Canvas(self, bg=P["bg"], highlightthickness=0)
+            self.canvas.pack(fill="both", expand=True, padx=10, pady=6)
+            self.canvas.bind("<Configure>", lambda e: self.draw())
+            self.canvas.bind("<Motion>", self.hover)
+            self.canvas.bind("<Button-1>", self.click)
+            self.canvas.bind("<Double-Button-1>", self.drill)
+            self.draw()
+
+        def _canvas_size(self):
+            try:
+                return max(200, int(self.canvas.winfo_width())), max(120, int(self.canvas.winfo_height()))
+            except Exception:
+                return 900, 520
+
+        def scan(self, path=None, force=False):
+            path = str(path or self.path)
+            self.path, self.sel = path, None
+            self.crumb.config(text=path)
+            if path in self.cache and not force:
+                return self.draw()
+            task = Task()
+
+            def done(r):
+                if not task.cancelled:
+                    self.cache[path] = r
+                else:
+                    self.cache[path] = r                  # 取消时也显示已扫到的部分
+                self.draw()
+                items, total = r
+                self.info.config(text=tr("{0}：共 {1}，{2} 项。双击文件夹进入，点一块选中。", path, human(total), len(items))
+                                 + (("  " + tr("（已取消，只是部分结果）")) if task.cancelled else ""))
+
+            self.app.run_bg(lambda: space.scan_children(path, task), done, tr("分析空间占用…"), task=task)
+
+        def choose(self):
+            d = filedialog.askdirectory(initialdir=self.path)
+            if d:
+                self.scan(d)
+
+        def up(self):
+            parent = str(Path(self.path).parent)
+            if parent != self.path:
+                self.scan(parent)
+
+        def draw(self):
+            self.canvas.delete("all")
+            self.tiles = []
+            W, H = self._canvas_size()
+            items, total = self.cache.get(self.path, ([], 0))
+            if not items:
+                self.canvas.create_text(W / 2, H / 2, text=tr("点“开始分析”，看看空间都被谁占了。"), fill=theme.PALETTE["muted"])
+                return
+            grouped = space.group_small(items)
+            rects = space.squarify([i["size"] for i in grouped], 0, 0, W - 2, H - 2)
+            for (x, y, w, h), it in zip(rects, grouped):
+                self.tiles.append((x, y, w, h, it))
+                chosen = self.sel is it
+                self.canvas.create_rectangle(x + 1, y + 1, x + w, y + h, fill=space.color_for(it),
+                                             outline="#111827" if chosen else "#ffffff", width=3 if chosen else 2)
+                if w > 84 and h > 40:
+                    self.canvas.create_text(x + 8, y + 8, anchor="nw", fill="#111827", font=("", 9, "bold"),
+                                            text=it["name"][:max(4, int(w / 7))] + "\n" + human(it["size"]))
+
+        def _hit(self, e):
+            for x, y, w, h, it in self.tiles:
+                if x <= e.x <= x + w and y <= e.y <= y + h:
+                    return it
+            return None
+
+        def hover(self, e):
+            it = self._hit(e)
+            if it:
+                total = self.cache.get(self.path, ([], 1))[1] or 1
+                self.info.config(text=f"{it['name']} · {human(it['size'])} · {it['size'] / total * 100:.1f}%")
+
+        def click(self, e):
+            self.sel = self._hit(e)
+            self.draw()
+
+        def drill(self, e):
+            it = self._hit(e)
+            if it and it["path"] and it["is_dir"]:
+                self.scan(it["path"])
+
+        def reveal(self):
+            if self.sel and self.sel["path"]:
+                open_location(self.sel["path"])
+            else:
+                open_folder(self.path)
+
+        def trash_sel(self):
+            it = self.sel
+            if not it or not it["path"]:
+                return messagebox.showinfo(tr("提示"), tr("先点选一块要处理的文件或文件夹。"))
+            if not messagebox.askyesno(tr("确认"), tr("将“{0}”（{1}）移到回收站？可以在“还原中心”或系统回收站里找回。", it["name"], human(it["size"]))):
+                return
+
+            def done(ok):
+                if ok:
+                    self.cache.pop(self.path, None)
+                    self.scan(force=True)
+
+            self.app.run_bg(lambda: core.safe_remove(it["path"]), done, tr("处理中…"))
+
     class ExcludePanel(ttk.LabelFrame):
         """“排除”面板：勾选不想扫描的文件类型、用文件夹选择器添加不想扫描的文件夹；设置自动保存，下次打开还在"""
 
@@ -2431,8 +2656,8 @@ if tk:
         def __init__(self):
             super().__init__()
             self.title(f"Faster v{__version__}" + (tr("  [管理员]") if core.is_admin() else ""))
-            self.geometry("1120x740")
-            self.minsize(920, 600)
+            self.geometry("1180x760")
+            self.minsize(980, 600)
             theme.apply(self)                           # 统一的配色 / 字体 / 控件样式（失败会静默退回默认外观）
             self.q, self.busy_n = queue.Queue(), 0
             self.cur_task, self.cur_msg, self.tabs = None, "", {}
@@ -2446,14 +2671,14 @@ if tk:
             self.cancel_btn = ttk.Button(bar, text=tr("取消"), command=self.cancel_task)   # 有可取消的任务时才显示
             self.nb = ttk.Notebook(self)
             self.nb.pack(fill="both", expand=True)
-            for key, title, cls in (("home", tr("概览"), HomeTab), ("diag", tr("诊断"), DiagHub), ("junk", tr("垃圾清理"), JunkTab), ("large", tr("大文件"), LargeTab),
-                                    ("dup", tr("重复文件"), DupTab), ("startup", tr("启动项"), StartupTab),
+            for key, title, cls in (("home", tr("概览"), HomeTab), ("diag", tr("诊断"), DiagHub), ("junk", tr("垃圾清理"), JunkTab), ("dev", tr("开发者清理"), DevTab), ("large", tr("大文件"), LargeTab),
+                                    ("dup", tr("重复文件"), DupTab), ("space", tr("空间分析"), SpaceTab), ("startup", tr("启动项"), StartupTab),
                                     ("proc", tr("后台进程"), ProcTab), ("uninstall", tr("卸载程序"), UninstallTab),
                                     ("security", tr("风险扫描"), SecurityTab), ("wallet", tr("钱包安全"), WalletHub),
                                     ("restore", tr("还原中心"), RestoreTab),
                                     ("schedule", tr("自动清理"), ScheduleTab)):
                 w = cls(self)
-                self.nb.add(w, text=title)
+                self.nb.add(w, text=SHORT_TITLES[key] if i18n.LANG == "en" else title)
                 self.tabs[key] = w
             self.after(100, self.poll)
 
@@ -2512,6 +2737,9 @@ if tk:
 
         def op_clean_junk(self, a, args):
             self.tabs["junk"].clean_all(then=lambda: self.mark_done(a))
+
+        def op_clean_dev(self, a, args):
+            self.tabs["dev"].clean_all(then=lambda: self.mark_done(a))
 
         def op_empty_trash(self, a, args):
             if not messagebox.askyesno(tr("确认"), tr("清空回收站？此操作不可恢复。")):

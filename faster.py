@@ -18,7 +18,7 @@ Faster Faster  (Windows / macOS / Linux)
 
 依赖：Python 3.8+。可选：pip install psutil send2trash
 """
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 import os
 import sys
@@ -128,9 +128,11 @@ def is_admin():
         return False
 
 
-def dir_size(path):
+def dir_size(path, task=None):
     total = 0
     for root, _, files in os.walk(path, onerror=lambda e: None):
+        if task is not None and not task.tick(root):
+            break
         for f in files:
             try:
                 fp = os.path.join(root, f)

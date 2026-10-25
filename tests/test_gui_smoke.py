@@ -38,7 +38,8 @@ CJK = re.compile(r"[\\u4e00-\\u9fff]")
 def run_flow(code, lang):
     with tempfile.TemporaryDirectory() as h:
         env = dict(os.environ, HOME=h, USERPROFILE=h, FASTER_LANG=lang, PYTHONIOENCODING="utf-8", PYTHONUTF8="1",
-                   TEMP=os.path.join(h, "Temp"), TMP=os.path.join(h, "Temp"), LOCALAPPDATA=os.path.join(h, "AppData", "Local"))
+                   TEMP=os.path.join(h, "Temp"), TMP=os.path.join(h, "Temp"), LOCALAPPDATA=os.path.join(h, "AppData", "Local"),
+                   APPDATA=os.path.join(h, "AppData", "Roaming"))
         for k in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
             env.pop(k, None)
         r = subprocess.run([sys.executable, "-c", PRELUDE + code], capture_output=True, encoding="utf-8", errors="replace",
@@ -91,6 +92,8 @@ print(json.dumps(out))
 
 V04_FLOW = '\nclass FL:                                                  # 一个真正能存东西的假 Listbox\n    def __init__(self): self.items = []\n    def insert(self, _pos, v): self.items.append(v)\n    def get(self, a, b=None): return list(self.items)\n    def curselection(self): return list(range(len(self.items)))\n    def delete(self, i): del self.items[i]\n    def pack(self, *a, **k): pass\ndef pick_all(t): t.selected = lambda: list(t.data.items())\nout = {}\nmk(H + "/proj/a/v.mp4", 3000000); mk(H + "/proj/a/p.jpg", 3000000); mk(H + "/proj/b/doc.bin", 3000000); mk(H + "/proj/b/c/other.bin", 3000000)\nL = app.tabs["large"]; L.root_var.set(H + "/proj"); L.mb.set("1")\nL.scan(); drain(); out["large_all"] = len(L.data)\nL.excl.vars["video"].set(True); L.excl.save(); L.scan(); drain(); out["large_no_video"] = len(L.data)\nL.excl.vars["image"].set(True); L.excl.save(); L.scan(); drain(); out["large_no_video_image"] = len(L.data)\nL.excl.box = FL(); sys.modules["tkinter.filedialog"].askdirectory = lambda **k: H + "/proj/b"\nL.excl.add_folder(); L.scan(); drain(); out["large_no_folder"] = len(L.data)\nout["saved"] = core.exclusion_config("large")\nout["dup_unaffected"] = core.exclusion_config("dup")\nL.excl.remove(); out["after_remove"] = core.exclusion_config("large")["folders"]\nD = app.tabs["dup"]; D.excl.vars["archive"].set(True); D.excl.save(); out["dup_saved"] = core.exclusion_config("dup")["groups"]\nD.root_var.set(H + "/proj"); D.scan(); drain(); out["dup_rows"] = len(D.data)\nhub = app.tabs["diag"].subtabs\nS = hub["sig"]; S.scan(); drain(); out["sig_rows"] = len(S.data); pick_all(S); S.copy_hash(); S.reveal()\nB = hub["baseline"]; B.compare(); drain(); out["baseline_none"] = bl_load_is_none = (__import__("faster_baseline").load() is None)\nB.set_baseline(); drain(); out["baseline_set"] = __import__("faster_baseline").load() is not None\nB.compare(); drain(); out["baseline_rows_same"] = len(B.data)\nopen(H + "/.hosts_test", "w").write("x")\nB.accept(); drain()\nHd = hub["harden"]; Hd.scan(); drain(); out["harden_rows"] = len(Hd.data); pick_all(Hd); Hd.fix()\napp.op_copy_text({}, {"text": "abc", "note": "ok"})\nout["messages"] = len(fake_tk.MESSAGES)\nout["cjk"] = sorted({x for x in fake_tk.SEEN if CJK.search(x)})\nprint(json.dumps(out))\n'
 
+DEV_FLOW = '\ndef pick_all(t): t.selected = lambda: list(t.data.items())\nout = {}\nspecs = {s["id"]: s for s in __import__("faster_dev").cache_specs()}\nfor sid, n in (("npm", 4000), ("pip", 3000)):\n    p = specs[sid]["paths"][0]; os.makedirs(p, exist_ok=True); open(p / "a.bin", "wb").write(b"x" * n)\nold = time.time() - 300 * 86400\nmk(H + "/proj_old/node_modules/pkg/f.js", 5000); open(H + "/proj_old/package.json", "w").write("{}")\nfor q in (H + "/proj_old/package.json", H + "/proj_old"): os.utime(q, (old, old))\nD = app.tabs["dev"]\nD.scan(); drain(); out["dev_rows"] = sorted(o["id"] for o in D.data.values())\nD.days.set("90"); D.scan_projects(); drain(); out["dev_kinds"] = sorted({o["kind"] for o in D.data.values()})\npick_all(D); D.clean(); drain(); out["dev_after"] = len(D.data)\nout["npm_empty"] = os.listdir(specs["npm"]["paths"][0]) == []\nout["proj_gone"] = not os.path.exists(H + "/proj_old/node_modules")\nR = app.tabs["restore"]; R.load(); out["restore_has_project"] = any(o[0] == "tool" and "node_modules" in o[1]["orig"] for o in R.data.values())\nS = app.tabs["space"]\nmk(H + "/space_dir/big.bin", 200000); mk(H + "/space_dir/small.bin", 3000)\nS.scan(H + "/space_dir"); drain(); out["space_tiles"] = len(S.tiles); out["drill_path"] = os.path.basename(S.path)\nclass E: x = 5; y = 5\nS.hover(E()); S.click(E()); out["selected"] = S.sel is not None; S.drill(E())\nS.up(); drain(); out["up_ok"] = os.path.samefile(S.path, H)\nS.path = H + "/space_dir"; S.sel = dict(name="big.bin", path=H + "/space_dir/big.bin", size=200000, is_dir=False); S.trash_sel(); drain()\nout["trashed"] = not os.path.exists(H + "/space_dir/big.bin")\nfor sid in ("npm", "pip"):\n    p = specs[sid]["paths"][0]; os.makedirs(p, exist_ok=True); open(p / "b.bin", "wb").write(b"y" * 2000)\nact = fd.act("clean_dev", "x", page="dev"); app.run_action(act); drain(); out["clean_dev_done"] = act["done"]\nout["cjk"] = sorted({x for x in fake_tk.SEEN if CJK.search(x)})\nprint(json.dumps(out))\n'
+
 ALLOWED_CJK_IN_EN = {"Language / 语言: ", "简体中文"}
 
 
@@ -108,7 +111,7 @@ class GuiSmoke(unittest.TestCase):
         if sys.platform.startswith("linux"):                       # 可疑启动项用 Linux 的 autostart 文件模拟
             self.assertIn("disable_startup", r["ops"])
             self.assertIn("disable_startup", r["done"])
-        for page in ("junk", "startup", "impact", "proc", "restore", "security", "wallet", "sig", "baseline", "harden"):
+        for page in ("junk", "startup", "impact", "proc", "restore", "security", "wallet", "sig", "baseline", "harden", "dev"):
             self.assertIn(page, r["panels"])                  # 这些页面顶部都挂了“建议操作”面板
         self.assertGreater(r["deep"], r["n"] - 5)
         self.assertEqual(r["busy"], 0)
@@ -146,6 +149,26 @@ class GuiSmoke(unittest.TestCase):
         self.assertTrue(r["baseline_set"])
         self.assertEqual(r["baseline_rows_same"], 0)
         self.assertGreaterEqual(r["messages"], 1)
+
+    def test_v05_dev_cleanup_and_space_analysis_zh(self):
+        r = run_flow(DEV_FLOW, "zh")
+        self.assertEqual(r["dev_rows"], ["npm", "pip"])
+        self.assertEqual(r["dev_kinds"], ["cache", "project"])
+        self.assertEqual(r["dev_after"], 0)
+        self.assertTrue(r["npm_empty"])                           # 缓存被清空
+        self.assertTrue(r["proj_gone"])                           # 旧项目的依赖目录被移走…
+        self.assertTrue(r["restore_has_project"])                 # …并且能在还原中心找到
+        self.assertGreaterEqual(r["space_tiles"], 2)
+        self.assertEqual(r["drill_path"], "space_dir")
+        self.assertTrue(r["selected"])
+        self.assertTrue(r["up_ok"])
+        self.assertTrue(r["trashed"])
+        self.assertTrue(r["clean_dev_done"])                      # 诊断里的“清理开发缓存”动作
+
+    def test_v05_new_tabs_en_has_no_chinese(self):
+        r = run_flow(DEV_FLOW, "en")
+        self.assertEqual(r["dev_rows"], ["npm", "pip"])
+        self.assertEqual([x for x in r["cjk"] if x not in ALLOWED_CJK_IN_EN], [])
 
     def test_v04_new_tabs_en_has_no_chinese(self):
         r = run_flow(V04_FLOW, "en")

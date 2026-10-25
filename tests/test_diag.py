@@ -239,7 +239,7 @@ class Actions(unittest.TestCase):
     def test_expected_actions(self):
         by = {f["key"]: f for f in self.all_findings()}
         ops = lambda k: [a["op"] for a in by[k]["actions"]]          # noqa: E731
-        self.assertEqual(ops("disk"), ["clean_junk", "goto"])
+        self.assertEqual(ops("disk"), ["clean_junk", "goto", "goto"])      # 清理垃圾 / 查找大文件 / 查看空间占用
         self.assertIn("clean_junk", ops("junk"))
         self.assertEqual(ops("startup"), ["goto", "disable_high"])
         self.assertEqual(ops("power"), ["open_settings"])
